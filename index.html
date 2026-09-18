@@ -491,7 +491,10 @@ tr.rowbtn:active{background:var(--surface2)}
     $('wId').value=nextId();
     $('wWfs').value=l?l.wfs:s.wfs;$('wVolts').value=l?l.volts:s.volts;$('wGas').value=l?(l.gas||s.gas):s.gas;
     segSet('wGoal','');loadMethod([]);segSet('wResult','');
-    var sf=l?(Number(l.endFlat)||Number(l.startFlat)||1):1; $('wStartFlat').value=sf;$('wEndFlat').value=sf;
+    // Faces follow the weld ID: next weld starts one face on from the previous start (in the session's direction) and keeps the same span.
+    var step=(s.dir==='down')?-1:1, ps=l?Number(l.startFlat):NaN, pe=l?Number(l.endFlat):NaN;
+    var sf=isNaN(ps)?1:Math.max(1,ps+step), ef=isNaN(pe)||isNaN(ps)?sf:Math.max(1,sf+(pe-ps));
+    $('wStartFlat').value=sf;$('wEndFlat').value=ef;
     segSet('wStartPos','start');segSet('wEndPos','end');
     $('wNoise').checked=false;$('wNoiseNote').hidden=true;$('wNoiseNote').value='';$('wNotes').value='';
     pendingIds.forEach(photoDel); pendingIds=[]; pBefore=null; pAfter=null; renderPhotos();
@@ -564,6 +567,8 @@ tr.rowbtn:active{background:var(--surface2)}
       pendingIds=[]; resetWeldForm(); return }
     if(beforeReq()&&!pBefore){toast('Before photo is required for this session');return}
     if(afterReq()&&!pAfter){toast('After photo is required before saving');return}
+    var myId=String($('wId').value), dup=cur().welds.some(function(x,k){return k!==editingIdx&&String(x.id)===myId});
+    if(dup&&!confirm('Weld #'+myId+' already exists in this session. Photos and rows are matched by weld ID, so a duplicate will be confusing. Save anyway?')) return;
     if(startTs&&!stopTs){ stopTs=Date.now();
       if(segs.length){ segs.push({id:Number($('wId').value)||$('wId').value,startTs:startTs,stopTs:stopTs}); review={list:segs,i:0}; segs=[]; loadSegment(0); toast('Stopped. Now save each segment.'); return } }
     var w=formToWeld(); var s=cur(); pendingIds=[];
@@ -648,15 +653,19 @@ tr.rowbtn:active{background:var(--surface2)}
     var cdLen=0; cd.forEach(function(x){cdLen+=x.length});
     var end=new Uint8Array([].concat(u32(0x06054b50),u16(0),u16(0),u16(entries.length),u16(entries.length),u32(cdLen),u32(off),u16(0)));
     return new Blob(parts.concat(cd,[end]),{type:'application/zip'}) }
-  function buildBundle(all){ var ss=all?state.sessions:[cur()]; var jobs=[];
+  function buildBundle(all){ var ss=all?state.sessions:[cur()]; var jobs=[], used={};
     ss.forEach(function(s){ s.welds.forEach(function(w){ [['before',w.photoBefore],['after',w.photoAfter]].forEach(function(p){ if(!p[1]) return;
-      jobs.push(photoGet(p[1].id).then(function(b){ if(!b) return null; return b.arrayBuffer().then(function(ab){ return {name:photoName(s,w.id,p[0]),data:new Uint8Array(ab)} }) })) }) }) });
-    return Promise.all(jobs).then(function(files){ var entries=[{name:fileName(all),data:new TextEncoder().encode('﻿'+toCsv(all))}];
-      files.forEach(function(f){ if(f) entries.push(f) }); return {blob:buildZip(entries),count:files.filter(Boolean).length} }) }
+      var name=photoName(s,w.id,p[0]); if(used[name]){ used[name]++; name=name.replace(/\.jpg$/,'_dup'+used[name]+'.jpg') } else used[name]=1;
+      jobs.push(photoGet(p[1].id).then(function(b){ if(!b) return {missing:name}; return b.arrayBuffer().then(function(ab){ return {name:name,data:new Uint8Array(ab)} }) })) }) }) });
+    return Promise.all(jobs).then(function(files){ var entries=[{name:fileName(all),data:new TextEncoder().encode('﻿'+toCsv(all))}], missing=[];
+      files.forEach(function(f){ if(f&&f.data) entries.push(f); else if(f&&f.missing) missing.push(f.missing) });
+      if(missing.length) entries.push({name:'MISSING_PHOTOS.txt',data:new TextEncoder().encode('These photos are referenced in the CSV but were not found on this phone:\n'+missing.join('\n')+'\n')});
+      return {blob:buildZip(entries),count:entries.length-1-(missing.length?1:0),missing:missing.length} }) }
   function zipName(all){ return fileName(all).replace(/\.csv$/,'.zip') }
 
   if(navigator.share&&navigator.canShare){try{var tz=new File(['x'],'t.zip',{type:'application/zip'});if(navigator.canShare({files:[tz]})){$('btnShareZip').hidden=false;
     $('btnShareZip').addEventListener('click',function(){ toast('Building bundle...'); buildBundle(allBox()).then(function(r){ var f=new File([r.blob],zipName(allBox()),{type:'application/zip'});
+      toast('Bundle: '+rows(allBox()).length+' welds, '+r.count+' photos'+(r.missing?', '+r.missing+' MISSING':''));
       return navigator.share({files:[f],title:zipName(allBox())}) }).catch(function(e){ if(!e||e.name!=='AbortError') toast('Share not available here.') }) })}}catch(e){}}
   if(window.claude&&typeof window.claude.use==='function'){window.claude.use('downloads').then(function(dl){if(!dl)return;$('btnSaveZip').hidden=false;
     $('btnSaveZip').addEventListener('click',function(){ toast('Building bundle...'); buildBundle(allBox()).then(function(r){ return dl.save({filename:zipName(allBox()),data:r.blob}) })
