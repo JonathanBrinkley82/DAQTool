@@ -9,8 +9,8 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 
 COLS = [
     ("session_date", 12), ("shift", 8), ("session", 9), ("unit", 6),
-    ("pole_side", 10), ("flange", 8), ("weld_side", 10), ("direction", 10),
-    ("rotation", 9), ("setup_notes", 40), ("recorder_clock_reading", 20),
+    ("pole_section", 12), ("flange", 8), ("weld_side", 10), ("direction", 10),
+    ("rotation", 9), ("rotation_viewed_from", 20), ("setup_notes", 40), ("recorder_clock_reading", 20),
     ("phone_time_at_reading_utc", 24), ("std_wfs", 9), ("std_volts", 10),
     ("weld_id", 8), ("segment", 9), ("wfs", 8), ("volts", 8), ("gas_cfh", 9), ("goal", 20),
     ("method", 26), ("start_flat", 10), ("start_pos", 10), ("end_flat", 9),
@@ -22,7 +22,7 @@ ROWS = 500  # pre-validated blank rows
 
 LISTS = {
     "shift": ["day", "night"],
-    "pole_side": ["top", "bottom"],
+    "pole_section": ["top", "bottom"],
     "flange": ["top", "bottom"],
     "weld_side": ["inner", "outer"],
     "direction": ["up", "down"],
@@ -67,6 +67,11 @@ ws.column_dimensions[get_column_letter(chk)].width = 16
 ws.cell(row=1, column=chk + 1, value="runtime_diff_s").font = Font(bold=True, color="FFFFFF")
 ws.cell(row=1, column=chk + 1).fill = PatternFill("solid", fgColor="D3601A")
 ws.column_dimensions[get_column_letter(chk + 1)].width = 14
+for k, name in ((2, "before_link"), (3, "after_link")):
+    ws.cell(row=1, column=chk + k, value=name).font = Font(bold=True, color="FFFFFF")
+    ws.cell(row=1, column=chk + k).fill = PatternFill("solid", fgColor="D3601A")
+    ws.column_dimensions[get_column_letter(chk + k)].width = 14
+EXTRA = 4  # computed columns after the export columns
 
 sc = get_column_letter(idx["start_time_utc"])
 ec = get_column_letter(idx["stop_time_utc"])
@@ -80,8 +85,12 @@ for r in range(2, last + 1):
             value=f'=IF(OR({sc}{r}="",{ec}{r}=""),"",IFERROR(ROUND((VALUE({ec}{r})-VALUE({sc}{r}))*86400,3),"check"))')
     ws.cell(row=r, column=chk + 1,
             value=f'=IF(OR({cc}{r}="",{rc}{r}="",NOT(ISNUMBER({cc}{r}))),"",ROUND({cc}{r}-{rc}{r},3))')
-    for name in ("session_date", "shift", "session", "unit", "pole_side", "flange",
-                 "weld_side", "direction", "rotation", "setup_notes",
+    # clickable links to the photos, relative to wherever this workbook is saved
+    bp = get_column_letter(idx["before_photo"]); ap = get_column_letter(idx["after_photo"])
+    ws.cell(row=r, column=chk + 2, value=f'=IF({bp}{r}="","",HYPERLINK({bp}{r},"before"))')
+    ws.cell(row=r, column=chk + 3, value=f'=IF({ap}{r}="","",HYPERLINK({ap}{r},"after"))')
+    for name in ("session_date", "shift", "session", "unit", "pole_section", "flange",
+                 "weld_side", "direction", "rotation", "rotation_viewed_from", "setup_notes",
                  "recorder_clock_reading", "phone_time_at_reading_utc", "std_wfs", "std_volts"):
         ws.cell(row=r, column=idx[name]).fill = sess_fill
 
@@ -106,7 +115,7 @@ for c, (name, vals) in enumerate(LISTS.items(), start=1):
     dv.add(f"{tcol}2:{tcol}{last}")
 
 # table with filters, freeze panes
-ref = f"A1:{get_column_letter(chk + 1)}{last}"
+ref = f"A1:{get_column_letter(chk + EXTRA - 1)}{last}"
 tab = Table(displayName="WeldLog", ref=ref)
 tab.tableStyleInfo = TableStyleInfo(name="TableStyleLight1", showRowStripes=True)
 ws.add_table(tab)
@@ -135,6 +144,9 @@ lines = [
     ("runtime_s is what the app measured. runtime_check_s recomputes it from the two stamps. runtime_diff_s should be 0.", False),
     ("segment is filled only when the welder stopped and restarted by accident mid-weld: each piece gets its own weld ID and a segment like 2/3.", False),
     ("before_photo / after_photo hold the file names inside the Share bundle ZIP (sN_wM_before.jpg).", False),
+    ("   Unzip the bundle into a folder, save this workbook in that same folder, and before_link / after_link become clickable.", False),
+    ("   For photos embedded in the sheet itself, run: python build_workbook.py <bundle.zip>  (see that script).", False),
+    ("rotation_viewed_from records the viewpoint that makes CW/CCW unambiguous (e.g. drive end).", False),
     ("", False),
     ("Dropdown lists live on the Lists sheet. Add a value there and it appears in the dropdown.", False),
     ("Keep this file as the template. Save each shift's data as a copy.", False),

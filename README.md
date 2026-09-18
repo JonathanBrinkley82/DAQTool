@@ -9,3 +9,4 @@ All entered data stays in the phone's browser storage. Nothing is sent anywhere 
 - `index.html` - the app (open in Safari, Add to Home Screen)
 - `DAQTool-Template.xlsx` - Excel workbook matching the export column-for-column
 - `make_template.py` - regenerates the workbook (`python make_template.py`)
+- `build_workbook.py` - turns a Share-bundle ZIP into a workbook with the photos embedded per row (`python build_workbook.py bundle.zip`)

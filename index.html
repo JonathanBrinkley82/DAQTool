@@ -168,11 +168,12 @@ tr.rowbtn:active{background:var(--surface2)}
         <div class="field"><label>Shift</label><div class="seg" id="sShift"><button type="button" data-v="day">Day</button><button type="button" data-v="night">Night</button></div></div>
         <div class="field"><label for="sNum">Session #</label><input type="number" id="sNum" inputmode="numeric"></div>
         <div class="field"><label for="sUnit">Recording unit</label><input type="number" id="sUnit" inputmode="numeric" placeholder="1, 2 ..."></div>
-        <div class="field"><label>Pole side</label><div class="seg" id="sSide"><button type="button" data-v="top">Top</button><button type="button" data-v="bottom">Bottom</button></div></div>
-        <div class="field"><label>Flange</label><div class="seg" id="sFlange"><button type="button" data-v="top">Top</button><button type="button" data-v="bottom">Bottom</button></div></div>
-        <div class="field"><label>Weld</label><div class="seg" id="sWeldSide"><button type="button" data-v="inner">Inner</button><button type="button" data-v="outer">Outer</button></div></div>
+        <div class="field"><label>Pole section (which half of the pole)</label><div class="seg" id="sSide"><button type="button" data-v="top">Top</button><button type="button" data-v="bottom">Bottom</button></div></div>
+        <div class="field"><label>Flange (on that section)</label><div class="seg" id="sFlange"><button type="button" data-v="top">Top</button><button type="button" data-v="bottom">Bottom</button></div></div>
+        <div class="field"><label>Weld (of that flange)</label><div class="seg" id="sWeldSide"><button type="button" data-v="inner">Inner</button><button type="button" data-v="outer">Outer</button></div></div>
         <div class="field"><label>Direction (flat numbers)</label><div class="seg" id="sDir"><button type="button" data-v="up">Up, increasing</button><button type="button" data-v="down">Down, decreasing</button></div></div>
         <div class="field"><label>Pole rotation</label><div class="seg" id="sRot"><button type="button" data-v="CW">CW</button><button type="button" data-v="CCW">CCW</button></div></div>
+        <div class="field span"><label for="sRotFrom">Rotation viewed from (so CW/CCW means the same to everyone)</label><input type="text" id="sRotFrom" placeholder="e.g. drive end, top end, looking at flange face"></div>
         <div class="field"><label for="sGas">Gas CFH</label><input type="number" id="sGas" inputmode="decimal" step="any"></div>
         <div class="field"><label for="sWfs">Standard WFS</label><input type="number" id="sWfs" inputmode="decimal" step="any"></div>
         <div class="field"><label for="sVolts">Standard volts</label><input type="number" id="sVolts" inputmode="decimal" step="any"></div>
@@ -221,6 +222,7 @@ tr.rowbtn:active{background:var(--surface2)}
             <button type="button" data-v="volt change">Volt change</button>
             <button type="button" data-v="other">Other</button>
           </div>
+          <input type="text" id="wMethodOther" placeholder="describe the other method" hidden style="margin-top:6px">
         </div>
 
         <div class="field"><label>Start flat</label>
@@ -367,7 +369,7 @@ tr.rowbtn:active{background:var(--surface2)}
   function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
 
   function blankSession(over){
-    return Object.assign({id:uid(),date:todayIso(),shift:'',num:'',unit:'',side:'',flange:'',weldSide:'',dir:'up',rot:'',gas:'',wfs:'',volts:'',clock:'',clockPhone:'',notes:'',beforeReq:'optional',afterReq:'optional',welds:[]},over||{})
+    return Object.assign({id:uid(),date:todayIso(),shift:'',num:'',unit:'',side:'',flange:'',weldSide:'',dir:'up',rot:'',rotFrom:'',gas:'',wfs:'',volts:'',clock:'',clockPhone:'',notes:'',beforeReq:'optional',afterReq:'optional',welds:[]},over||{})
   }
   function seedSession(){
     // Transcribed from the Session 13 notes (2026-09-16). The notes had no timestamps.
@@ -414,18 +416,18 @@ tr.rowbtn:active{background:var(--surface2)}
   });
   document.querySelectorAll('[data-step]').forEach(function(b){b.addEventListener('click',function(){var inp=$(b.dataset.step);var v=(parseInt(inp.value,10)||0)+parseInt(b.dataset.d,10);inp.value=Math.max(1,v);inp.dispatchEvent(new Event('input',{bubbles:true}))})});
 
-  var sFields=['sDate','sNum','sUnit','sGas','sWfs','sVolts','sClock','sNotes'];
+  var sFields=['sDate','sNum','sUnit','sGas','sWfs','sVolts','sClock','sNotes','sRotFrom'];
   var sSegs={sShift:'shift',sSide:'side',sFlange:'flange',sWeldSide:'weldSide',sDir:'dir',sRot:'rot',sBeforeReq:'beforeReq',sAfterReq:'afterReq'};
   function beforeReq(){return cur().beforeReq==='required'}
   function afterReq(){return cur().afterReq==='required'}
   function sessionToForm(){var s=cur();
-    $('sDate').value=s.date||'';$('sNum').value=s.num;$('sUnit').value=s.unit;$('sGas').value=s.gas;$('sWfs').value=s.wfs;$('sVolts').value=s.volts;$('sClock').value=s.clock;$('sNotes').value=s.notes;
+    $('sDate').value=s.date||'';$('sNum').value=s.num;$('sUnit').value=s.unit;$('sGas').value=s.gas;$('sWfs').value=s.wfs;$('sVolts').value=s.volts;$('sClock').value=s.clock;$('sNotes').value=s.notes;$('sRotFrom').value=s.rotFrom||'';
     for(var k in sSegs) segSet(k,s[sSegs[k]]);
     $('sClockPhone').textContent='Phone time at reading (UTC): '+(s.clockPhone?fmtTs(s.clockPhone):'not stamped');
     renderStrip(); renderSessionPick();
   }
   function formToSession(){var s=cur();
-    s.date=$('sDate').value;s.num=$('sNum').value;s.unit=$('sUnit').value;s.gas=$('sGas').value;s.wfs=$('sWfs').value;s.volts=$('sVolts').value;s.clock=$('sClock').value;s.notes=$('sNotes').value;
+    s.date=$('sDate').value;s.num=$('sNum').value;s.unit=$('sUnit').value;s.gas=$('sGas').value;s.wfs=$('sWfs').value;s.volts=$('sVolts').value;s.clock=$('sClock').value;s.notes=$('sNotes').value;s.rotFrom=$('sRotFrom').value;
     for(var k in sSegs) s[sSegs[k]]=segGet(k);
     save(); renderStrip(); renderSessionPick(); renderPhotos();
   }
@@ -436,7 +438,7 @@ tr.rowbtn:active{background:var(--surface2)}
   function renderStrip(){var s=cur();
     var parts=[];if(s.date)parts.push(s.date);if(s.shift)parts.push(s.shift);
     $('stripTitle').textContent='Session '+(s.num||'?')+(parts.length?' · '+parts.join(' '):'');
-    var sub=[];if(s.unit)sub.push('unit '+s.unit);if(s.side)sub.push(s.side+' side');if(s.flange)sub.push(s.flange+' flange');if(s.weldSide)sub.push(s.weldSide);if(s.dir)sub.push('welding '+s.dir);if(s.rot)sub.push(s.rot);
+    var sub=[];if(s.unit)sub.push('unit '+s.unit);if(s.side)sub.push(s.side+' section');if(s.flange)sub.push(s.flange+' flange');if(s.weldSide)sub.push(s.weldSide);if(s.dir)sub.push('welding '+s.dir);if(s.rot)sub.push(s.rot);
     $('stripSub').textContent=sub.join(' · ')||'tap Session setup to fill in';
   }
 
@@ -488,7 +490,7 @@ tr.rowbtn:active{background:var(--surface2)}
     editingIdx=-1;document.body.classList.remove('editing');$('btnCancelEdit').hidden=true;$('btnDeleteWeld').hidden=true;
     $('wId').value=nextId();
     $('wWfs').value=l?l.wfs:s.wfs;$('wVolts').value=l?l.volts:s.volts;$('wGas').value=l?(l.gas||s.gas):s.gas;
-    segSet('wGoal','');segSet('wMethod',[]);segSet('wResult','');
+    segSet('wGoal','');loadMethod([]);segSet('wResult','');
     var sf=l?(Number(l.endFlat)||Number(l.startFlat)||1):1; $('wStartFlat').value=sf;$('wEndFlat').value=sf;
     segSet('wStartPos','start');segSet('wEndPos','end');
     $('wNoise').checked=false;$('wNoiseNote').hidden=true;$('wNoiseNote').value='';$('wNotes').value='';
@@ -497,7 +499,7 @@ tr.rowbtn:active{background:var(--surface2)}
   }
   function weldToForm(i){var w=cur().welds[i];if(!w)return;editingIdx=i;document.body.classList.add('editing');$('btnCancelEdit').hidden=false;$('btnDeleteWeld').hidden=false;
     $('wId').value=w.id;$('wWfs').value=w.wfs;$('wVolts').value=w.volts;$('wGas').value=w.gas;
-    segSet('wGoal',w.goal);segSet('wMethod',w.method||[]);segSet('wResult',w.result);
+    segSet('wGoal',w.goal);loadMethod(w.method);segSet('wResult',w.result);
     $('wStartFlat').value=w.startFlat;$('wEndFlat').value=w.endFlat;segSet('wStartPos',w.startPos);segSet('wEndPos',w.endPos);
     $('wNoise').checked=!!w.noise;$('wNoiseNote').hidden=!w.noise;$('wNoiseNote').value=w.noiseNote||'';$('wNotes').value=w.notes||'';
     pendingIds.forEach(photoDel); pendingIds=[]; pBefore=w.photoBefore||null; pAfter=w.photoAfter||null; renderPhotos();
@@ -505,10 +507,13 @@ tr.rowbtn:active{background:var(--surface2)}
     document.querySelector('.panel.weld').scrollIntoView({behavior:'smooth',block:'start'});
   }
   function formToWeld(){return {id:Number($('wId').value)||$('wId').value,wfs:$('wWfs').value,volts:$('wVolts').value,gas:$('wGas').value,
-    goal:segGet('wGoal'),method:segGet('wMethod'),startFlat:$('wStartFlat').value,startPos:segGet('wStartPos'),endFlat:$('wEndFlat').value,endPos:segGet('wEndPos'),
+    goal:segGet('wGoal'),method:methodList(),startFlat:$('wStartFlat').value,startPos:segGet('wStartPos'),endFlat:$('wEndFlat').value,endPos:segGet('wEndPos'),
     result:segGet('wResult'),noise:$('wNoise').checked,noiseNote:$('wNoiseNote').value,notes:$('wNotes').value,startTs:startTs,stopTs:stopTs,photoBefore:pBefore,photoAfter:pAfter,segment:''}}
   $('wId').addEventListener('input',function(){$('weldIdLabel').textContent='#'+$('wId').value;renderTiming()});
   $('wNoise').addEventListener('change',function(){$('wNoiseNote').hidden=!$('wNoise').checked;if($('wNoise').checked)$('wNoiseNote').focus()});
+  $('wMethod').addEventListener('change',function(){var on=segGet('wMethod').indexOf('other')>=0;$('wMethodOther').hidden=!on;if(on&&!$('wMethodOther').value)$('wMethodOther').focus()});
+  function methodList(){ var m=segGet('wMethod').slice(); var o=$('wMethodOther').value.trim(); var i=m.indexOf('other'); if(i>=0&&o) m[i]='other: '+o; return m }
+  function loadMethod(m){ m=(m||[]).slice(); var o=''; for(var i=0;i<m.length;i++){ if(m[i].indexOf('other: ')===0){ o=m[i].slice(7); m[i]='other' } } segSet('wMethod',m); $('wMethodOther').value=o; $('wMethodOther').hidden=m.indexOf('other')<0 }
   $('wStartFlat').addEventListener('input',function(){if(editingIdx<0&&(Number($('wEndFlat').value)||0)<Number($('wStartFlat').value))$('wEndFlat').value=$('wStartFlat').value});
 
   function renderTiming(){
@@ -599,10 +604,10 @@ tr.rowbtn:active{background:var(--surface2)}
     c.welds.forEach(delWeldPhotos);
     state.sessions=state.sessions.filter(function(s){return s.id!==c.id});if(!state.sessions.length)state.sessions.push(blankSession());state.active=state.sessions[state.sessions.length-1].id;save();sessionToForm();renderTable();resetWeldForm();toast('Session deleted')});
 
-  var COLS=['session_date','shift','session','unit','pole_side','flange','weld_side','direction','rotation','setup_notes','recorder_clock_reading','phone_time_at_reading_utc','std_wfs','std_volts',
+  var COLS=['session_date','shift','session','unit','pole_section','flange','weld_side','direction','rotation','rotation_viewed_from','setup_notes','recorder_clock_reading','phone_time_at_reading_utc','std_wfs','std_volts',
     'weld_id','segment','wfs','volts','gas_cfh','goal','method','start_flat','start_pos','end_flat','end_pos','result','noise','noise_note','notes','before_photo','after_photo','start_time_utc','stop_time_utc','runtime_s'];
   function rows(all){var ss=all?state.sessions:[cur()];var out=[];
-    ss.forEach(function(s){s.welds.forEach(function(w){out.push([s.date,s.shift,s.num,s.unit,s.side,s.flange,s.weldSide,s.dir,s.rot,s.notes,s.clock,s.clockPhone?fmtTs(s.clockPhone):'',s.wfs,s.volts,
+    ss.forEach(function(s){s.welds.forEach(function(w){out.push([s.date,s.shift,s.num,s.unit,s.side,s.flange,s.weldSide,s.dir,s.rot,s.rotFrom||'',s.notes,s.clock,s.clockPhone?fmtTs(s.clockPhone):'',s.wfs,s.volts,
       w.id,w.segment||'',w.wfs,w.volts,w.gas,w.goal,(w.method||[]).join('; '),w.startFlat,w.startPos,w.endFlat,w.endPos,w.result,w.noise?'yes':'no',w.noiseNote,w.notes,
       w.photoBefore?photoName(s,w.id,'before'):'',w.photoAfter?photoName(s,w.id,'after'):'',
       w.startTs?fmtTs(w.startTs):'',w.stopTs?fmtTs(w.stopTs):'',w.startTs&&w.stopTs?((w.stopTs-w.startTs)/1000).toFixed(3):''])})});
