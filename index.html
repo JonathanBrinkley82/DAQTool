@@ -1,5 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="DAQ Tool">
+<meta name="theme-color" content="#D3601A">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
 <title>DAQ Tool</title>
 <style>
+[hidden]{display:none!important}
+img{max-width:100%}
 :root{
   --bg:#EEEDE9; --surface:#FFFFFF; --surface2:#F6F5F2; --line:#D6D4CE; --ink:#1B1D21; --muted:#6A6D74;
   --accent:#D3601A; --accent-ink:#FFFFFF; --accent-soft:#FBE9DD;
@@ -128,6 +141,8 @@ tr.rowbtn:active{background:var(--surface2)}
 .badge-edit{display:none;font-size:12px;color:var(--accent);font-weight:600}
 .editing .badge-edit{display:inline}
 </style>
+</head>
+<body>
 
 <div class="app">
   <header class="strip">
@@ -676,3 +691,5 @@ tr.rowbtn:active{background:var(--surface2)}
   load(); sessionToForm(); renderTable(); resetWeldForm();
 })();
 </script>
+</body>
+</html>
