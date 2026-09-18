@@ -87,8 +87,9 @@ for r in range(2, last + 1):
             value=f'=IF(OR({cc}{r}="",{rc}{r}="",NOT(ISNUMBER({cc}{r}))),"",ROUND({cc}{r}-{rc}{r},3))')
     # clickable links to the photos, relative to wherever this workbook is saved
     bp = get_column_letter(idx["before_photo"]); ap = get_column_letter(idx["after_photo"])
-    ws.cell(row=r, column=chk + 2, value=f'=IF({bp}{r}="","",HYPERLINK({bp}{r},"before"))')
-    ws.cell(row=r, column=chk + 3, value=f'=IF({ap}{r}="","",HYPERLINK({ap}{r},"after"))')
+    # cells may list several photos separated by "; " (one per face); link opens the first one
+    ws.cell(row=r, column=chk + 2, value=f'=IF({bp}{r}="","",HYPERLINK(IFERROR(LEFT({bp}{r},FIND(";",{bp}{r})-1),{bp}{r}),"before"))')
+    ws.cell(row=r, column=chk + 3, value=f'=IF({ap}{r}="","",HYPERLINK(IFERROR(LEFT({ap}{r},FIND(";",{ap}{r})-1),{ap}{r}),"after"))')
     for name in ("session_date", "shift", "session", "unit", "pole_section", "flange",
                  "weld_side", "direction", "rotation", "rotation_viewed_from", "setup_notes",
                  "recorder_clock_reading", "phone_time_at_reading_utc", "std_wfs", "std_volts"):
@@ -143,7 +144,8 @@ lines = [
     ("   Recorder time = phone UTC + (recorder_clock_reading - phone_time_at_reading_utc). Use that offset to line up sensor logs.", False),
     ("runtime_s is what the app measured. runtime_check_s recomputes it from the two stamps. runtime_diff_s should be 0.", False),
     ("segment is filled only when the welder stopped and restarted by accident mid-weld: each piece gets its own weld ID and a segment like 2/3.", False),
-    ("before_photo / after_photo hold the file names inside the Share bundle ZIP (sN_wM_before.jpg).", False),
+    ("before_photo / after_photo list the file names inside the Share bundle ZIP, one per face, separated by '; '", False),
+    ("   e.g. s20_w5_before_f5.jpg; s20_w5_before_f6.jpg  (extra photos beyond the faces are _x1, _x2 ...).", False),
     ("   Unzip the bundle into a folder, save this workbook in that same folder, and before_link / after_link become clickable.", False),
     ("   For photos embedded in the sheet itself, run: python build_workbook.py <bundle.zip>  (see that script).", False),
     ("rotation_viewed_from records the viewpoint that makes CW/CCW unambiguous (e.g. drive end).", False),

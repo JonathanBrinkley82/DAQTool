@@ -40,13 +40,22 @@ def main(zip_path):
     if missing:
         print("warning: columns in CSV but not in template (skipped):", missing)
 
-    # image columns go after the last template column
-    img_before_col = len(sheet_header) + 1
-    img_after_col = img_before_col + 1
-    ws.cell(row=1, column=img_before_col, value="before_img")
-    ws.cell(row=1, column=img_after_col, value="after_img")
-    for c in (img_before_col, img_after_col):
+    # image columns go after the last template column: one column per photo slot,
+    # before_img_1..n then after_img_1..m (n, m = most photos any weld has)
+    def split(v): return [x.strip() for x in (v or "").split(";") if x.strip()]
+    recs = [dict(zip(header, rec)) for rec in data]
+    n_before = max([len(split(d.get("before_photo"))) for d in recs] + [1])
+    n_after = max([len(split(d.get("after_photo"))) for d in recs] + [1])
+    first_img_col = len(sheet_header) + 1
+    before_cols = [first_img_col + i for i in range(n_before)]
+    after_cols = [first_img_col + n_before + i for i in range(n_after)]
+    for i, c in enumerate(before_cols):
+        ws.cell(row=1, column=c, value=f"before_img_{i + 1}")
+    for i, c in enumerate(after_cols):
+        ws.cell(row=1, column=c, value=f"after_img_{i + 1}")
+    for c in before_cols + after_cols:
         ws.column_dimensions[get_column_letter(c)].width = THUMB_PX / 7  # ~pixels/7 = chars
+    last_img_col = after_cols[-1]
 
     def put_image(fname, row, col):
         if not fname or fname not in names:
@@ -59,9 +68,8 @@ def main(zip_path):
         return True
 
     embedded = 0
-    for i, rec in enumerate(data):
+    for i, d in enumerate(recs):
         r = i + 2
-        d = dict(zip(header, rec))
         for name, val in d.items():
             if name in col_of and val != "":
                 # numbers stay numbers
@@ -70,15 +78,18 @@ def main(zip_path):
                 except ValueError:
                     v = val
                 ws.cell(row=r, column=col_of[name], value=v)
-        got = put_image(d.get("before_photo"), r, img_before_col)
-        got = put_image(d.get("after_photo"), r, img_after_col) or got
+        got = False
+        for fname, col in zip(split(d.get("before_photo")), before_cols):
+            got = put_image(fname, r, col) or got
+        for fname, col in zip(split(d.get("after_photo")), after_cols):
+            got = put_image(fname, r, col) or got
         if got:
             ws.row_dimensions[r].height = ROW_PT
             embedded += 1
 
     # extend the table to cover the data + image columns
     tab = ws.tables["WeldLog"]
-    tab.ref = f"A1:{get_column_letter(img_after_col)}{max(len(data) + 1, 2)}"
+    tab.ref = f"A1:{get_column_letter(last_img_col)}{max(len(data) + 1, 2)}"
 
     out = zip_path.with_suffix(".xlsx")
     wb.save(out)
