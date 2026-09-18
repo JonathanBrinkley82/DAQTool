@@ -592,6 +592,7 @@ tr.rowbtn:active{background:var(--surface2)}
       var open=function(){weldToForm(i)};tr.addEventListener('click',open);tr.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}});
       tb.appendChild(tr)});
     $('dockRight').textContent=w.length+' saved';
+    renderSessionPick();
   }
 
   function renderSessionPick(){var sel=$('sessionPick');while(sel.firstChild)sel.removeChild(sel.firstChild);state.sessions.forEach(function(s){var o=document.createElement('option');o.value=s.id;o.textContent='Session '+(s.num||'?')+' · '+(s.date||'no date')+(s.shift?' '+s.shift:'')+' · '+s.welds.length+' welds';if(s.id===state.active)o.selected=true;sel.appendChild(o)})}
