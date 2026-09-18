@@ -72,11 +72,14 @@ def main(zip_path):
         r = i + 2
         for name, val in d.items():
             if name in col_of and val != "":
-                # numbers stay numbers
-                try:
-                    v = float(val) if val.replace(".", "", 1).replace("-", "", 1).isdigit() else val
-                except ValueError:
-                    v = val
+                # numbers stay numbers; segment "1/3" from older exports becomes "1 of 3" text
+                if name == "segment":
+                    v = val.replace("/", " of ") if "/" in val else val
+                else:
+                    try:
+                        v = float(val) if val.replace(".", "", 1).replace("-", "", 1).isdigit() else val
+                    except ValueError:
+                        v = val
                 ws.cell(row=r, column=col_of[name], value=v)
         got = False
         for fname, col in zip(split(d.get("before_photo")), before_cols):

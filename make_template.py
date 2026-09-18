@@ -9,7 +9,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 
 COLS = [
     ("session_date", 12), ("shift", 8), ("session", 9), ("unit", 6),
-    ("pole_section", 12), ("flange", 8), ("weld_side", 10), ("direction", 10),
+    ("flange", 8), ("weld_side", 10), ("direction", 10),
     ("rotation", 9), ("rotation_viewed_from", 20), ("setup_notes", 40), ("recorder_clock_reading", 20),
     ("phone_time_at_reading_utc", 24), ("std_wfs", 9), ("std_volts", 10),
     ("weld_id", 8), ("segment", 9), ("wfs", 8), ("volts", 8), ("gas_cfh", 9), ("goal", 20),
@@ -22,7 +22,6 @@ ROWS = 500  # pre-validated blank rows
 
 LISTS = {
     "shift": ["day", "night"],
-    "pole_section": ["top", "bottom"],
     "flange": ["top", "bottom"],
     "weld_side": ["inner", "outer"],
     "direction": ["up", "down"],
@@ -90,7 +89,7 @@ for r in range(2, last + 1):
     # cells may list several photos separated by "; " (one per face); link opens the first one
     ws.cell(row=r, column=chk + 2, value=f'=IF({bp}{r}="","",HYPERLINK(IFERROR(LEFT({bp}{r},FIND(";",{bp}{r})-1),{bp}{r}),"before"))')
     ws.cell(row=r, column=chk + 3, value=f'=IF({ap}{r}="","",HYPERLINK(IFERROR(LEFT({ap}{r},FIND(";",{ap}{r})-1),{ap}{r}),"after"))')
-    for name in ("session_date", "shift", "session", "unit", "pole_section", "flange",
+    for name in ("session_date", "shift", "session", "unit", "flange",
                  "weld_side", "direction", "rotation", "rotation_viewed_from", "setup_notes",
                  "recorder_clock_reading", "phone_time_at_reading_utc", "std_wfs", "std_volts"):
         ws.cell(row=r, column=idx[name]).fill = sess_fill
@@ -104,7 +103,11 @@ for name in ("runtime_s",):
     col = get_column_letter(idx[name])
     for r in range(2, last + 1):
         ws[f"{col}{r}"].number_format = "0.000"
-ws.column_dimensions[get_column_letter(idx["session_date"])].number_format = "yyyy-mm-dd"
+# text-only columns: keeps pasted values like "1 of 3" or a clock reading from turning into dates
+for name in ("segment", "recorder_clock_reading", "session_date"):
+    col = get_column_letter(idx[name])
+    for r in range(2, last + 1):
+        ws[f"{col}{r}"].number_format = "@"
 
 # dropdowns
 for c, (name, vals) in enumerate(LISTS.items(), start=1):
@@ -137,13 +140,14 @@ lines = [
     ("3. Dropdowns, filters, and the runtime check extend automatically to new rows inside the table.", False),
     ("", False),
     ("Columns", True),
-    ("Grey columns (A to N) are session info, repeated on every weld row so filters and pivots work.", False),
-    ("White columns (O onward) are per weld. One row = one weld.", False),
+    ("Grey columns (A to M) are session info, repeated on every weld row so filters and pivots work.", False),
+    ("White columns (N onward) are per weld. One row = one weld.", False),
     ("start_time_utc / stop_time_utc / phone_time_at_reading_utc are UTC, to the millisecond, from the phone clock.", False),
     ("recorder_clock_reading is whatever the recording unit displayed when phone_time_at_reading_utc was stamped.", False),
     ("   Recorder time = phone UTC + (recorder_clock_reading - phone_time_at_reading_utc). Use that offset to line up sensor logs.", False),
     ("runtime_s is what the app measured. runtime_check_s recomputes it from the two stamps. runtime_diff_s should be 0.", False),
-    ("segment is filled only when the welder stopped and restarted by accident mid-weld: each piece gets its own weld ID and a segment like 2/3.", False),
+    ("segment is filled only when the welder stopped and restarted by accident mid-weld: each piece gets its own weld ID and a segment like '2 of 3'.", False),
+    ("   Older exports wrote '2/3'; if Excel shows a date there, retype it as text or re-export from the app.", False),
     ("before_photo / after_photo list the file names inside the Share bundle ZIP, one per face, separated by '; '", False),
     ("   e.g. s20_w5_before_f5.jpg; s20_w5_before_f6.jpg  (extra photos beyond the faces are _x1, _x2 ...).", False),
     ("   Unzip the bundle into a folder, save this workbook in that same folder, and before_link / after_link become clickable.", False),
