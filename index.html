@@ -135,6 +135,16 @@ tr.rowbtn:active{background:var(--surface2)}
 .pthumb .del{position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:14px;line-height:1;padding:0}
 .thumbs{display:flex;gap:4px;margin-top:4px}
 .thumbs img{width:32px;height:32px;object-fit:cover;border-radius:4px;border:1px solid var(--line)}
+.cam{position:fixed;inset:0;z-index:21;background:#000;display:flex;flex-direction:column}
+.cam video{flex:1;min-height:0;width:100%;object-fit:cover;background:#000}
+.cam-top{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;background:var(--surface);color:var(--ink);font-weight:600}
+.cam-top .mono{font-weight:400;color:var(--muted);font-size:13px}
+.cam-bar{display:flex;gap:10px;align-items:stretch;padding:10px 14px calc(12px + env(safe-area-inset-bottom));background:var(--surface)}
+.cam-bar .big{flex:1;min-height:64px;font-size:20px}
+.cam-bar .btn{flex:0 0 auto}
+.cam-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .12s}
+.cam-flash.on{opacity:.7}
+@media (prefers-reduced-motion: reduce){.cam-flash{transition:none}}
 .viewer{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.92);display:flex;flex-direction:column}
 .viewer img{flex:1;min-height:0;object-fit:contain;width:100%}
 .viewer-bar{display:flex;gap:8px;align-items:center;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:var(--surface);color:var(--ink)}
@@ -227,6 +237,10 @@ tr.rowbtn:active{background:var(--surface2)}
             <button type="button" data-v="other">Other</button>
           </div>
           <input type="text" id="wMethodOther" placeholder="describe the other method" hidden style="margin-top:6px">
+          <div class="grid" id="wMethodVals" hidden style="margin-top:8px">
+            <div class="field" id="wWfsChgBox" hidden><label for="wWfsChg">WFS for this weld</label><input type="number" id="wWfsChg" inputmode="decimal" step="any"></div>
+            <div class="field" id="wVoltsChgBox" hidden><label for="wVoltsChg">Volts for this weld</label><input type="number" id="wVoltsChg" inputmode="decimal" step="any"></div>
+          </div>
         </div>
 
         <div class="field"><label>Start flat</label>
@@ -278,8 +292,8 @@ tr.rowbtn:active{background:var(--surface2)}
   </section>
 
   <section>
-    <div class="panel">
-      <h2>This session's welds</h2>
+    <details class="panel" id="weldsPanel">
+      <summary><span>This session's welds <span class="mono" id="weldsCount"></span></span><span class="hint">tap to show / hide</span></summary>
       <div class="tablewrap">
         <table id="weldTable">
           <thead><tr><th>ID</th><th>Goal / result</th><th>Flats</th><th>WFS / V</th><th>Run</th></tr></thead>
@@ -288,7 +302,7 @@ tr.rowbtn:active{background:var(--surface2)}
       </div>
       <div class="empty" id="emptyMsg">No welds yet. Fill the form, tap Start when the arc strikes, Stop when it breaks, then Save.</div>
       <div class="note">Latest weld on top. Tap a row to edit or delete it.</div>
-    </div>
+    </details>
   </section>
 
   <section>
@@ -345,6 +359,16 @@ tr.rowbtn:active{background:var(--surface2)}
   </div>
 </div>
 <div class="toast" id="toast" role="status"></div>
+<div class="cam" id="cam" hidden>
+  <div class="cam-top"><span id="camTitle">Photos</span><span id="camInfo" class="mono"></span></div>
+  <video id="camVideo" autoplay playsinline muted></video>
+  <div class="cam-flash" id="camFlash"></div>
+  <div class="cam-bar">
+    <button class="btn" type="button" id="camFile">Camera app</button>
+    <button class="big start" type="button" id="camSnap">Snap</button>
+    <button class="btn" type="button" id="camDone">Done</button>
+  </div>
+</div>
 <div class="viewer" id="viewer" hidden>
   <img id="viewerImg" alt="Weld photo">
   <div class="viewer-bar">
@@ -469,12 +493,29 @@ tr.rowbtn:active{background:var(--surface2)}
       var thumb=tc.toDataURL('image/jpeg',0.7);
       c.toBlob(function(b){ URL.revokeObjectURL(url); if(!b) rej(new Error('encode')); else res({blob:b,thumb:thumb}) },'image/jpeg',0.82) }catch(e){ URL.revokeObjectURL(url); rej(e) } };
     img.onerror=function(){ URL.revokeObjectURL(url); rej(new Error('load')) }; img.src=url }) }
-  function onPhotoPicked(kind,input){ var f=input.files&&input.files[0]; input.value=''; if(!f) return; toast('Saving photo...');
-    processFile(f).then(function(p){ var id=uid(); return photoPut(id,p.blob).then(function(){ var list=kind==='before'?pB:pA; var rec={id:id,thumb:p.thumb,face:nextFace(list)};
-      pendingIds.push(id); list.push(rec); renderPhotos(); renderTiming(); toast((kind==='before'?'Before':'After')+' photo '+list.length+(rec.face?' (face '+rec.face+')':' (extra)')+' saved') }) })
+  function addPhoto(kind,f){ toast('Saving photo...');
+    return processFile(f).then(function(p){ var id=uid(); return photoPut(id,p.blob).then(function(){ var list=kind==='before'?pB:pA; var rec={id:id,thumb:p.thumb,face:nextFace(list)};
+      pendingIds.push(id); list.push(rec); renderPhotos(); renderTiming(); var msg=(kind==='before'?'Before':'After')+' photo '+list.length+(rec.face?' (face '+rec.face+')':' (extra)')+' saved'; toast(msg); return msg }) })
     .catch(function(e){ var why=(e&&(e.name||e.message))||'unknown'; toast('Photo failed: '+why+' ('+(f.type||'no type')+', '+Math.round(f.size/1024)+' KB)'); console.error('photo',e) }) }
-  $('btnBefore').addEventListener('click',function(){ $('fileBefore').click() });
-  $('btnAfter').addEventListener('click',function(){ $('fileAfter').click() });
+  function onPhotoPicked(kind,input){ var f=input.files&&input.files[0]; input.value=''; if(!f) return; addPhoto(kind,f) }
+
+  // ---- in-page camera: snap as many faces as needed with no "Use Photo" step; falls back to the camera app ----
+  var camStream=null, camKind='before';
+  function openCamera(kind){ camKind=kind;
+    if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ $('file'+(kind==='before'?'Before':'After')).click(); return }
+    navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1440}},audio:false}).then(function(st){
+      camStream=st; var v=$('camVideo'); v.srcObject=st; $('cam').hidden=false; $('camTitle').textContent=(kind==='before'?'Before':'After')+' photos'; camInfo(); return v.play() })
+    .catch(function(){ $('file'+(kind==='before'?'Before':'After')).click() }) }
+  function camInfo(){ var list=camKind==='before'?pB:pA; var nf=nextFace(list); $('camInfo').textContent=list.length+' taken · next: '+(nf?'face '+nf:'extra') }
+  function closeCamera(){ if(camStream){ camStream.getTracks().forEach(function(t){ t.stop() }); camStream=null } $('camVideo').srcObject=null; $('cam').hidden=true }
+  $('camSnap').addEventListener('click',function(){ var v=$('camVideo'); if(!v.videoWidth){ toast('Camera not ready'); return }
+    var c=document.createElement('canvas'); c.width=v.videoWidth; c.height=v.videoHeight; c.getContext('2d').drawImage(v,0,0);
+    var b=$('camSnap'); b.disabled=true; $('camFlash').classList.add('on'); setTimeout(function(){ $('camFlash').classList.remove('on') },120);
+    c.toBlob(function(blob){ if(!blob){ b.disabled=false; toast('Snap failed'); return } addPhoto(camKind,blob).then(function(){ camInfo(); b.disabled=false }) },'image/jpeg',0.9) });
+  $('camDone').addEventListener('click',closeCamera);
+  $('camFile').addEventListener('click',function(){ closeCamera(); $('file'+(camKind==='before'?'Before':'After')).click() });
+  $('btnBefore').addEventListener('click',function(){ openCamera('before') });
+  $('btnAfter').addEventListener('click',function(){ openCamera('after') });
   $('fileBefore').addEventListener('change',function(){ onPhotoPicked('before',this) });
   $('fileAfter').addEventListener('change',function(){ onPhotoPicked('after',this) });
   function renderPhotos(){
@@ -505,8 +546,9 @@ tr.rowbtn:active{background:var(--surface2)}
   function resetWeldForm(){var s=cur(),l=lastWeld();
     editingIdx=-1;document.body.classList.remove('editing');$('btnCancelEdit').hidden=true;$('btnDeleteWeld').hidden=true;
     $('wId').value=nextId();
-    $('wWfs').value=l?l.wfs:s.wfs;$('wVolts').value=l?l.volts:s.volts;$('wGas').value=l?(l.gas||s.gas):s.gas;
-    segSet('wGoal','');loadMethod([]);segSet('wResult','');
+    // WFS / volts / gas start from the session standard every weld; a change is declared through the method chips.
+    $('wWfs').value=s.wfs;$('wVolts').value=s.volts;$('wGas').value=s.gas;
+    segSet('wGoal','');loadMethod([]);syncMethodVals();segSet('wResult','');
     // Faces follow the weld ID: next weld starts one face on from the previous start (in the session's direction) and keeps the same span.
     var step=(s.dir==='down')?-1:1, ps=l?Number(l.startFlat):NaN, pe=l?Number(l.endFlat):NaN;
     var sf=isNaN(ps)?1:Math.max(1,ps+step), ef=isNaN(pe)||isNaN(ps)?sf:Math.max(1,sf+(pe-ps));
@@ -518,7 +560,7 @@ tr.rowbtn:active{background:var(--surface2)}
   }
   function weldToForm(i){var w=cur().welds[i];if(!w)return;editingIdx=i;document.body.classList.add('editing');$('btnCancelEdit').hidden=false;$('btnDeleteWeld').hidden=false;
     $('wId').value=w.id;$('wWfs').value=w.wfs;$('wVolts').value=w.volts;$('wGas').value=w.gas;
-    segSet('wGoal',w.goal);loadMethod(w.method);segSet('wResult',w.result);
+    segSet('wGoal',w.goal);loadMethod(w.method);syncMethodVals();segSet('wResult',w.result);
     $('wStartFlat').value=w.startFlat;$('wEndFlat').value=w.endFlat;segSet('wStartPos',w.startPos);segSet('wEndPos',w.endPos);
     $('wNoise').checked=!!w.noise;$('wNoiseNote').hidden=!w.noise;$('wNoiseNote').value=w.noiseNote||'';$('wNotes').value=w.notes||'';
     pendingIds.forEach(photoDel); pendingIds=[]; removedIds=[]; pB=wPhotos(w,'before').map(function(p){return Object.assign({},p)}); pA=wPhotos(w,'after').map(function(p){return Object.assign({},p)}); renderPhotos();
@@ -530,7 +572,17 @@ tr.rowbtn:active{background:var(--surface2)}
     result:segGet('wResult'),noise:$('wNoise').checked,noiseNote:$('wNoiseNote').value,notes:$('wNotes').value,startTs:startTs,stopTs:stopTs,photosBefore:pB.slice(),photosAfter:pA.slice(),segment:''}}
   $('wId').addEventListener('input',function(){$('weldIdLabel').textContent='#'+$('wId').value;renderTiming()});
   $('wNoise').addEventListener('change',function(){$('wNoiseNote').hidden=!$('wNoise').checked;if($('wNoise').checked)$('wNoiseNote').focus()});
-  $('wMethod').addEventListener('change',function(){var on=segGet('wMethod').indexOf('other')>=0;$('wMethodOther').hidden=!on;if(on&&!$('wMethodOther').value)$('wMethodOther').focus()});
+  // WFS change / volt change: ask for the changed value right under the method chips; it writes the weld's WFS / volts fields.
+  function syncMethodVals(){ var m=segGet('wMethod'); var w=m.indexOf('WFS change')>=0, v=m.indexOf('volt change')>=0;
+    $('wMethodVals').hidden=!(w||v); $('wWfsChgBox').hidden=!w; $('wVoltsChgBox').hidden=!v;
+    if(w) $('wWfsChg').value=$('wWfs').value; if(v) $('wVoltsChg').value=$('wVolts').value; return {w:w,v:v} }
+  $('wMethod').addEventListener('change',function(){var on=segGet('wMethod').indexOf('other')>=0;$('wMethodOther').hidden=!on;if(on&&!$('wMethodOther').value)$('wMethodOther').focus();
+    var was={w:!$('wWfsChgBox').hidden,v:!$('wVoltsChgBox').hidden}; var now=syncMethodVals();
+    if(now.w&&!was.w) $('wWfsChg').focus(); else if(now.v&&!was.v) $('wVoltsChg').focus() });
+  $('wWfsChg').addEventListener('input',function(){ $('wWfs').value=this.value });
+  $('wVoltsChg').addEventListener('input',function(){ $('wVolts').value=this.value });
+  $('wWfs').addEventListener('input',function(){ if(!$('wWfsChgBox').hidden) $('wWfsChg').value=this.value });
+  $('wVolts').addEventListener('input',function(){ if(!$('wVoltsChgBox').hidden) $('wVoltsChg').value=this.value });
   function methodList(){ var m=segGet('wMethod').slice(); var o=$('wMethodOther').value.trim(); var i=m.indexOf('other'); if(i>=0&&o) m[i]='other: '+o; return m }
   function loadMethod(m){ m=(m||[]).slice(); var o=''; for(var i=0;i<m.length;i++){ if(m[i].indexOf('other: ')===0){ o=m[i].slice(7); m[i]='other' } } segSet('wMethod',m); $('wMethodOther').value=o; $('wMethodOther').hidden=m.indexOf('other')<0 }
   $('wStartFlat').addEventListener('input',function(){if(editingIdx<0&&(Number($('wEndFlat').value)||0)<Number($('wStartFlat').value))$('wEndFlat').value=$('wStartFlat').value});
@@ -614,8 +666,16 @@ tr.rowbtn:active{background:var(--surface2)}
       var open=function(){weldToForm(i)};tr.addEventListener('click',open);tr.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}});
       tb.appendChild(tr)});
     $('dockRight').textContent=w.length+' saved';
+    $('weldsCount').textContent='('+w.length+')';
     renderSessionPick();
   }
+  // welds list collapsible; remember the choice on this phone
+  (function(){ var d=$('weldsPanel'); try{ d.open=localStorage.getItem('poleweldlog.weldsOpen')!=='0' }catch(e){}
+    d.addEventListener('toggle',function(){ try{ localStorage.setItem('poleweldlog.weldsOpen',d.open?'1':'0') }catch(e){} }) })();
+  // keep the page's bottom padding equal to the pinned bar's height so nothing hides behind it
+  (function(){ var dock=document.querySelector('.dock'), app=document.querySelector('.app');
+    function fit(){ app.style.paddingBottom=(dock.offsetHeight+24)+'px' }
+    if(window.ResizeObserver){ new ResizeObserver(fit).observe(dock) } window.addEventListener('resize',fit); fit() })();
 
   function renderSessionPick(){var sel=$('sessionPick');while(sel.firstChild)sel.removeChild(sel.firstChild);state.sessions.forEach(function(s){var o=document.createElement('option');o.value=s.id;o.textContent='Session '+(s.num||'?')+' · '+(s.date||'no date')+(s.shift?' '+s.shift:'')+' · '+s.welds.length+' welds';if(s.id===state.active)o.selected=true;sel.appendChild(o)})}
   $('sessionPick').addEventListener('change',function(){state.active=$('sessionPick').value;save();sessionToForm();renderTable();resetWeldForm()});
