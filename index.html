@@ -398,26 +398,15 @@ tr.rowbtn:active{background:var(--surface2)}
     return Object.assign({id:uid(),date:todayIso(),shift:'',num:'',unit:'',side:'',flange:'',weldSide:'',dir:'up',rot:'',rotFrom:'',gas:'',wfs:'',volts:'',clock:'',clockPhone:'',notes:'',beforeReq:'optional',afterReq:'optional',welds:[]},over||{})
   }
   function seedSession(){
-    // Transcribed from the Session 13 notes (2026-09-16). The notes had no timestamps.
-    function W(id,o){return Object.assign({id:id,wfs:300,volts:27.5,gas:'',goal:'',method:[],startFlat:'',startPos:'',endFlat:'',endPos:'',result:'',noise:false,noiseNote:'',notes:'',startTs:null,stopTs:null},o)}
-    var s=blankSession({date:'2026-09-16',shift:'night',num:13,unit:2,flange:'bottom',weldSide:'outer',dir:'up',rot:'CCW',wfs:300,volts:27.5,
-      notes:'Example session transcribed from the Notes app. Unit 2: if weld is stopped and restarted quickly the weld count does not tick up like unit 1 (?). Started on clean existing weld.'});
+    // Made-up example so the app is not empty on first open. Not real data.
+    function W(id,o){return Object.assign({id:id,wfs:300,volts:22,gas:'',goal:'',method:[],startFlat:'',startPos:'',endFlat:'',endPos:'',result:'',noise:false,noiseNote:'',notes:'',startTs:null,stopTs:null},o)}
+    var s=blankSession({date:'2026-01-01',shift:'day',num:1,unit:1,flange:'bottom',weldSide:'outer',dir:'up',rot:'CCW',wfs:300,volts:22,
+      notes:'Example session. Delete it and start your own.'});
     s.welds=[
-      W(1,{goal:'slag inclusion',method:['placed slag'],startFlat:1,startPos:'start',endFlat:4,endPos:'end',notes:'Slag placed on face 1.'}),
-      W(2,{goal:'slag inclusion',method:['placed slag'],startFlat:1,startPos:'start',endFlat:3,endPos:'start',notes:'Ended a quarter into face 3 to include slag pieces and slag trapped at toe of flange side. Minor pause and start, weld count did not go up.'}),
-      W(3,{goal:'slag inclusion',method:['placed slag'],startFlat:3,startPos:'start',endFlat:4,endPos:'end',notes:'Covered faces 3 and 4 with broken up slag pieces.'}),
-      W(4,{goal:'',method:[],startFlat:4,startPos:'end',endFlat:4,endPos:'end',notes:'Start stop close to the end of face 4.'}),
-      W(5,{goal:'porosity',method:['low gas'],startFlat:5,startPos:'start',endFlat:5,endPos:'end',noise:true,noiseNote:'rock music'}),
-      W(6,{goal:'porosity',method:['long arc'],startFlat:6,startPos:'start',endFlat:6,endPos:'end',noise:true,noiseNote:'rock music',notes:'Gas back to normal.'}),
-      W(7,{goal:'porosity',method:['fan'],startFlat:7,startPos:'start',endFlat:7,endPos:'end',noise:true,noiseNote:'rock music'}),
-      W(8,{goal:'porosity',method:['tool oil'],startFlat:8,startPos:'start',endFlat:8,endPos:'end',result:'clean, no defect',notes:'Looked clean, did not see porosity.'}),
-      W(9,{goal:'clean',method:[],startFlat:5,startPos:'start',endFlat:7,endPos:'end',notes:'Adjacent toe on flange, clean pass next to porosity from previous welds.'}),
-      W(10,{goal:'clean',method:[],startFlat:8,startPos:'start',endFlat:8,endPos:'end',noise:true,noiseNote:'rock music',notes:'Same as weld 9.'}),
-      W(11,{goal:'porosity',method:['low gas'],startFlat:5,startPos:'start',endFlat:8,endPos:'end',noise:true,noiseNote:'rock music, grinding',notes:'Low gas continuously.'}),
-      W(12,{goal:'lack of fusion',method:['WFS change','volt change'],wfs:221,volts:28,startFlat:9,startPos:'start',endFlat:10,endPos:'end',result:'clean, no defect',notes:'Weld seemed perfect, no defects.'}),
-      W(13,{goal:'lack of fusion',method:['WFS change','volt change'],wfs:360,volts:22.9,startFlat:9,startPos:'start',endFlat:10,endPos:'end',result:'as intended',notes:'Clear LOF.'}),
-      W(14,{goal:'lack of penetration',method:['WFS change','volt change'],wfs:250,volts:20.1,startFlat:11,startPos:'start',endFlat:12,endPos:'end',noise:true,noiseNote:'rock music'}),
-      W(15,{goal:'lack of penetration',method:['WFS change','volt change'],wfs:250,volts:20.1,startFlat:11,startPos:'start',endFlat:12,endPos:'end',result:'as intended',noise:true,noiseNote:'rock music',notes:'Lack of pen and fusion throughout, slag trap towards end of face 12.'})
+      W(1,{goal:'clean',method:[],startFlat:1,startPos:'start',endFlat:1,endPos:'end',result:'clean, no defect',notes:'baseline weld'}),
+      W(2,{goal:'porosity',method:['low gas'],startFlat:2,startPos:'start',endFlat:2,endPos:'end',result:'as intended',noise:true,noiseNote:'grinding nearby'}),
+      W(3,{goal:'slag inclusion',method:['placed slag'],startFlat:3,startPos:'start',endFlat:3,endPos:'end',notes:'slag placed mid-flat'}),
+      W(4,{goal:'lack of fusion',method:['WFS change','volt change'],wfs:250,volts:19,startFlat:4,startPos:'start',endFlat:4,endPos:'end',result:'as intended'})
     ];
     return s;
   }
