@@ -50,6 +50,8 @@ button{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .strip .title{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .strip .sub{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .strip .clock{font-family:var(--mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.strip .clockwrap{text-align:right}
+.strip .ver{font-family:var(--mono);font-size:10px;color:var(--muted)}
 .iconbtn{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:500}
 
 section{padding:14px}
@@ -166,7 +168,7 @@ tr.rowbtn:active{background:var(--surface2)}
       <div class="title" id="stripTitle">Session</div>
       <div class="sub" id="stripSub"></div>
     </div>
-    <div class="clock" id="clock">--:--:--</div>
+    <div class="clockwrap"><div class="clock" id="clock">--:--:--</div><div class="ver">v2026-09-24b</div></div>
     <button class="iconbtn" id="btnSessions" type="button">Sessions</button>
   </header>
 
