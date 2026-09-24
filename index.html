@@ -99,6 +99,7 @@ details.panel[open] > summary{margin-bottom:12px}
 .dock .result{max-width:640px;margin:0 auto 10px}
 .dock .result label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
 .dock .result .seg button{flex:1 1 auto;min-height:40px;padding:6px 8px;font-size:13px}
+.need{outline:2px solid var(--bad);outline-offset:2px;border-radius:10px}
 
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -595,8 +596,12 @@ tr.rowbtn:active{background:var(--surface2)}
     if(review) segN.textContent='Saving segment '+(review.i+1)+' of '+review.list.length+' (weld #'+review.list[review.i].id+'). Check result and notes, then tap Save weld.';
     $('dockLeft').textContent=running?'ARC ON  weld #'+$('wId').value+(segs.length?' (seg '+(segs.length+1)+')':''):(review?'save #'+review.list[review.i].id+' · '+(review.i+1)+'/'+review.list.length:(needBefore?'BEFORE photos '+pB.length+'/'+faceCount()+' to start #'+$('wId').value:(editingIdx>=0?'editing weld #'+$('wId').value:'next weld #'+$('wId').value)));
     $('dockRight').textContent=running?fmtRun(Date.now()-startTs):(cur().welds.length+' saved');
+    // Next-step outline: after the arc stops, the result chips need a pick; once picked, Save weld is the next step.
+    var stopped=!!(startTs&&stopTs), needResult=stopped&&!segGet('wResult');
+    $('wResult').classList.toggle('need',needResult); $('btnSave').classList.toggle('need',stopped&&!needResult);
     clearInterval(tick); if(running) tick=setInterval(function(){$('tRun').textContent=fmtRun(Date.now()-startTs);$('dockRight').textContent=fmtRun(Date.now()-startTs)},100);
   }
+  $('wResult').addEventListener('change',renderTiming);
   $('btnStartStop').addEventListener('click',function(){
     if(review) return;
     if(startTs&&!stopTs){ stopTs=Date.now();
@@ -618,6 +623,7 @@ tr.rowbtn:active{background:var(--surface2)}
     if(review){ var n=review.list.length, i=review.i, first=i===0, last=i===n-1;
       if(first&&beforeReq()&&pB.length<faceCount()){toast('Before photos required: '+pB.length+' of '+faceCount());return}
       if(last&&afterReq()&&pA.length<faceCount()){toast('After photos required: '+pA.length+' of '+faceCount());return}
+      if(!segGet('wResult')){renderTiming();toast('Pick the observed result before saving');return}
       var sw=formToWeld(); sw.segment=(i+1)+' of '+n; // "1 of 3", never "1/3": Excel reads that as a date sw.photosBefore=first?pB.slice():[]; sw.photosAfter=last?pA.slice():[];
       cur().welds.push(sw); save(); renderTable(); toast('Weld #'+sw.id+' saved ('+(i+1)+' of '+n+')');
       if(!last){ loadSegment(i+1); return }
@@ -628,6 +634,7 @@ tr.rowbtn:active{background:var(--surface2)}
     if(dup&&!confirm('Weld #'+myId+' already exists in this session. Photos and rows are matched by weld ID, so a duplicate will be confusing. Save anyway?')) return;
     if(startTs&&!stopTs){ stopTs=Date.now();
       if(segs.length){ segs.push({id:Number($('wId').value)||$('wId').value,startTs:startTs,stopTs:stopTs}); review={list:segs,i:0}; segs=[]; loadSegment(0); toast('Stopped. Now save each segment.'); return } }
+    if(!segGet('wResult')){renderTiming();toast('Pick the observed result before saving');return}
     var w=formToWeld(); var s=cur(); pendingIds=[];
     removedIds.forEach(photoDel); removedIds=[];
     if(editingIdx>=0){s.welds[editingIdx]=w;toast('Weld #'+w.id+' updated')}
