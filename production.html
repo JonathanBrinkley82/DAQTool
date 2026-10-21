@@ -225,7 +225,7 @@ textarea{min-height:80px;resize:vertical}
       <div class="panel">
         <div class="weldbig mono off" id="weldTime">0:00.0</div>
         <div class="weldlbl" id="weldLbl">Ready</div>
-        <div class="recline" id="recLine"><span id="clockLbl">Recorder</span> <span class="mono" id="bigClock">--:--:--.-</span></div>
+        <div class="recline" id="recLine"><span id="clockLbl">Recorder</span> <span class="mono" id="bigClock">--:--:--</span></div>
         <div class="passline" id="passLine"></div>
         <div class="facewrap">
           <div class="facemeta" style="text-align:right"><b>Face</b><span id="dirLbl"></span></div>
@@ -272,7 +272,7 @@ textarea{min-height:80px;resize:vertical}
 
 <script>
 (function(){
-  var LS_KEY='daqprod.v1', VER='v2026-10-21a', DAY=86400000;
+  var LS_KEY='daqprod.v1', VER='v2026-10-21b', DAY=86400000;
   function $(id){return document.getElementById(id)}
   function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
   // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
@@ -590,7 +590,7 @@ textarea{min-height:80px;resize:vertical}
   function tick(){ var n=Date.now(), s=cur();
     $('hdrClock').textContent=fmtTod(n,0)+' UTC';
     if(!$('vLive').hidden&&s){ var synced=s.offset!=null;
-      $('bigClock').textContent=synced?recTod(s,n,1):fmtTod(n,1); $('clockLbl').textContent=synced?'Recorder':'UTC · recorder not synced'; $('recLine').className='recline'+(synced?'':' warn');
+      $('bigClock').textContent=synced?recTod(s,n,0):fmtTod(n,0); $('clockLbl').textContent=synced?'Recorder':'UTC · recorder not synced'; $('recLine').className='recline'+(synced?'':' warn');
       // The weld run timer is the focal point: live while welding, last run's length while stopped.
       var on=live.weldSince!=null;
       $('weldTime').textContent=on?fmtRun(n-live.weldSince):fmtRun(live.lastRun||0); $('weldTime').className='weldbig mono'+(on?' on':' off');
