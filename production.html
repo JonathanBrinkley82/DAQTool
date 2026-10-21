@@ -268,7 +268,7 @@ textarea{min-height:80px;resize:vertical}
 
 <script>
 (function(){
-  var LS_KEY='daqprod.v1', VER='v2026-10-20b', DAY=86400000;
+  var LS_KEY='daqprod.v1', VER='v2026-10-20c', DAY=86400000;
   function $(id){return document.getElementById(id)}
   function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
   // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
@@ -449,7 +449,7 @@ textarea{min-height:80px;resize:vertical}
     st.rows.slice().reverse().forEach(function(r){ var b=el('button','lrow'); b.type='button';
       b.appendChild(el('span','lt',s.offset!=null?recTod(s,r.e.t,1):fmtTod(r.e.t,1)+'Z'));
       b.appendChild(el('span','le',describe(r)));
-      if(r.e.note) b.appendChild(el('span','ln',r.e.note)); else if(r.e.type==='MODEL') b.appendChild(el('span','ln missing','Tap to add what the model showed'));
+      if(r.e.note) b.appendChild(el('span','ln',r.e.note)); else if(r.e.type==='MODEL') b.appendChild(el('span','ln missing','Tap to add what the model showed')); else if(r.e.type==='NOTE') b.appendChild(el('span','ln missing','Tap to add a note'));
       b.addEventListener('click',function(){ editModal(r) }); log.appendChild(b) });
     renderHeader(); tick() }
   var live={weldSince:null};
@@ -483,11 +483,11 @@ textarea{min-height:80px;resize:vertical}
   function noteModal(t){ var s=cur(), st=replay(s), body=el('div');
     var seg=el('div','seg'); seg.id='mTag'; ['Grind out','Welder stop','Other'].forEach(function(x){ var b=el('button','',x); b.type='button'; b.dataset.v=x; b.setAttribute('aria-pressed','false'); seg.appendChild(b) });
     seg.addEventListener('click',function(ev){ var b=ev.target.closest('button'); if(b) seg.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')}) });
-    var ta=noteArea(''); ta.placeholder='What happened? (required)';
+    var ta=noteArea(''); ta.placeholder='What happened? (optional, can add later from the log)';
     body.appendChild(fieldEl('Type (optional)',seg)); var nf=fieldEl('Note',ta); body.appendChild(nf);
     openModal('Event on face '+(st.face==null?'-':st.face),'Logged at the tap: '+whenText(t),body,'Log event',function(){
-      var note=ta.value.trim(); if(!note){ nf.classList.add('need'); ta.focus(); return false }
-      var b=seg.querySelector('button[aria-pressed="true"]'); push({t:t,type:'NOTE',tag:b?b.dataset.v:'',note:note}); toast('Event logged') });
+      var note=ta.value.trim();
+      var b=seg.querySelector('button[aria-pressed="true"]'); push({t:t,type:'NOTE',tag:b?b.dataset.v:'',note:note}); toast(note?'Event logged':'Event logged. Tap it in the log to add a note.') });
     setTimeout(function(){ta.focus()},50) }
 
   function passModal(face,wfs,volts,after){ var s=cur(), st=replay(s), body=el('div');
@@ -515,7 +515,7 @@ textarea{min-height:80px;resize:vertical}
       s.events=s.events.filter(function(e){return e.id!==r.e.id}); save(); closeModal(); renderLive(); toast('Deleted') });
     body.appendChild(del);
     openModal(describe(r),whenText(r.e.t),body,'Save note',function(){
-      var v=ta.value.trim(); if(r.e.type==='NOTE'&&!v){ toast('Events need a note'); return false }
+      var v=ta.value.trim();
       r.e.note=v; save(); renderLive() }) }
 
   // ---- export ----
