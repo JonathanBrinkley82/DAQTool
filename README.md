@@ -15,3 +15,11 @@ address. The old data stays under the old URL and is not migrated automatically.
 - `DAQTool-Template.xlsx` - Excel workbook matching the export column-for-column
 - `make_template.py` - regenerates the workbook (`python make_template.py`)
 - `build_workbook.py` - turns a Share-bundle ZIP into a workbook with the photos embedded per row (`python build_workbook.py bundle.zip`)
+
+## Production logger (`production.html`)
+
+Live session logger for production welds. One session = one recording-unit on/off. Setup once
+(welder, bay, side, thickness, circumference, direction, session #, unit #), sync to the recorder
+clock, then per pass: WFS/volts, START/STOP, FACE (counts in the setup direction, 12 presses = one
+layer), MODEL FLAG (timestamp + face, detail added later), EVENT (note required). Exports one CSV
+row per event with recorder time and UTC. Uses its own storage key, so it does not touch `index.html` data.

@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="DAQ Prod">
+<meta name="theme-color" content="#D3601A">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<title>DAQ Production</title>
+<style>
+[hidden]{display:none!important}
+:root{
+  --bg:#EEEDE9; --surface:#FFFFFF; --surface2:#F6F5F2; --line:#D6D4CE; --ink:#1B1D21; --muted:#6A6D74;
+  --accent:#D3601A; --accent-ink:#FFFFFF; --accent-soft:#FBE9DD;
+  --good:#2F7D4F; --warn:#B8860B; --bad:#B23A3A; --on:#FFFFFF;
+  --focus:#2F6FD3;
+  --sans:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141618; --surface:#1E2124; --surface2:#26292D; --line:#3A3E44; --ink:#ECEAE4; --muted:#9A9DA4;
+    --accent:#F0813A; --accent-ink:#1B1D21; --accent-soft:#3A2A1F;
+    --good:#5CB87E; --warn:#D9B24C; --bad:#E06A6A; --on:#141618; --focus:#7FA8F0;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141618; --surface:#1E2124; --surface2:#26292D; --line:#3A3E44; --ink:#ECEAE4; --muted:#9A9DA4;
+  --accent:#F0813A; --accent-ink:#1B1D21; --accent-soft:#3A2A1F;
+  --good:#5CB87E; --warn:#D9B24C; --bad:#E06A6A; --on:#141618; --focus:#7FA8F0;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.4;-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button:disabled{opacity:.35;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+.app{max-width:640px;margin:0 auto;padding:0 0 40px}
+.strip{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px}
+.strip .who{flex:1;min-width:0}
+.strip .title{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strip .sub{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strip .ver{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:right}
+.iconbtn{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:500}
+
+section{padding:14px}
+h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;font-weight:600}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.panel + .panel,.panel + h2{margin-top:12px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+input[type=text],input[type=number],textarea{width:100%;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:16px}
+textarea{min-height:80px;resize:vertical}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:10px 6px;font-size:15px;font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper button{width:48px;height:44px;background:var(--surface2);border:1px solid var(--line);border-radius:8px;font-size:20px}
+.stepper input{text-align:center;width:72px}
+.note{font-size:13px;color:var(--muted);margin-top:6px}
+.btn{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:15px;font-weight:600}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.btnrow .btn{flex:1;min-width:120px}
+.need{outline:2px solid var(--bad);outline-offset:2px;border-radius:10px}
+
+/* sessions list */
+.srow{display:flex;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.srow:first-child{border-top:none}
+.srow .info{flex:1;min-width:0}
+.srow .t{font-weight:600}
+.srow .s{font-size:13px;color:var(--muted);font-family:var(--mono)}
+.tag{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:var(--muted)}
+.tag.open{border-color:var(--good);color:var(--good)}
+
+/* live */
+.clockbig{font-size:44px;font-weight:700;text-align:center;line-height:1.1}
+.clocklbl{font-size:12px;letter-spacing:.08em;text-transform:uppercase;text-align:center;color:var(--muted);margin-top:2px}
+.clocklbl.warn{color:var(--bad);font-weight:700}
+.passline{text-align:center;font-family:var(--mono);font-size:14px;margin-top:10px}
+.facewrap{display:flex;align-items:center;justify-content:center;gap:16px;margin:12px 0 8px}
+.facenum{font-size:64px;font-weight:700;line-height:1}
+.facemeta{font-size:13px;color:var(--muted)}
+.facemeta b{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.faces{display:grid;grid-template-columns:repeat(12,1fr);gap:3px}
+.faces div{font-family:var(--mono);font-size:12px;text-align:center;padding:6px 0;border-radius:4px;background:var(--surface2);border:1px solid var(--line);color:var(--muted)}
+.faces div.done{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.faces div.now{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.complete{text-align:center;font-weight:700;color:var(--good);margin-top:8px}
+.big{display:block;width:100%;border:none;border-radius:12px;min-height:92px;font-size:30px;font-weight:800;letter-spacing:.04em;margin-top:12px}
+.big small{display:block;font-size:14px;font-weight:600;letter-spacing:0;opacity:.85;font-family:var(--mono)}
+.big.start{background:var(--good);color:var(--on)}
+.big.stop{background:var(--bad);color:var(--on)}
+.big.face{background:var(--accent);color:var(--accent-ink)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.mid{min-height:68px;border-radius:12px;font-size:18px;font-weight:700;background:var(--surface);border:2px solid var(--line)}
+.mid.model{border-color:var(--warn);color:var(--warn)}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}
+.row3 .btn{padding:12px 4px;font-size:14px}
+.hit{filter:brightness(1.35)}
+.lrow{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:8px 0;border-top:1px solid var(--line);width:100%;text-align:left;background:none;border-left:none;border-right:none;border-bottom:none}
+.lrow:first-child{border-top:none}
+.lrow .lt{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.lrow .le{font-weight:600;font-size:14px}
+.lrow .ln{grid-column:2;font-size:13px;color:var(--muted)}
+.lrow .ln.missing{color:var(--warn)}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:640px;border-radius:12px 12px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));max-height:90vh;overflow:auto}
+.sheet h3{margin:0 0 4px;font-size:18px}
+.sheet .when{font-family:var(--mono);font-size:13px;color:var(--muted);margin-bottom:12px}
+.mbtns{display:flex;gap:8px;margin-top:12px}
+.mbtns .btn{flex:1}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;max-width:90vw;z-index:30}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="strip">
+    <button class="iconbtn" id="btnSessions" type="button">Sessions</button>
+    <div class="who"><div class="title" id="hdrTitle">DAQ Production</div><div class="sub" id="hdrSub">No session open</div></div>
+    <div><div class="sub mono" id="hdrClock"></div><div class="ver" id="ver"></div></div>
+  </header>
+
+  <!-- SESSIONS -->
+  <main id="vSessions">
+    <section>
+      <button class="btn primary" type="button" id="btnNew" style="width:100%;padding:16px;font-size:17px">+ New session</button>
+      <div class="note">A session is one recording-unit on/off. New sessions copy the setup from the last one.</div>
+    </section>
+    <section>
+      <h2>Sessions on this phone</h2>
+      <div class="panel" id="sessList"></div>
+    </section>
+    <section>
+      <h2>Export all</h2>
+      <div class="panel">
+        <div class="btnrow">
+          <button class="btn" type="button" id="btnShareAll">Share CSV</button>
+          <button class="btn" type="button" id="btnCopyAll">Copy for Excel</button>
+        </div>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn" type="button" id="btnBackup">Backup</button>
+          <button class="btn" type="button" id="btnRestore">Restore</button>
+          <input type="file" id="fileRestore" accept="application/json,.json" hidden>
+        </div>
+        <div class="note">Data lives only in this phone's browser. Back up at the end of each shift.</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- SETUP -->
+  <main id="vSetup" hidden>
+    <section>
+      <h2>Setup</h2>
+      <div class="panel">
+        <div class="grid2">
+          <div class="field"><label for="fNum">Session #</label><input type="text" id="fNum" inputmode="numeric"></div>
+          <div class="field"><label for="fUnit">Unit # (recorder)</label><input type="text" id="fUnit" inputmode="numeric"></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="fWelder">Welder</label><input type="text" id="fWelder" autocomplete="off"></div>
+          <div class="field"><label for="fBay">Bay #</label><input type="text" id="fBay" inputmode="numeric"></div>
+        </div>
+        <div class="field"><label>Side of pole</label>
+          <div class="seg" id="fSide"><button type="button" data-v="top">Top</button><button type="button" data-v="bottom">Bottom</button></div></div>
+        <div class="grid2">
+          <div class="field"><label for="fThick">Material thickness</label><input type="text" id="fThick" inputmode="decimal" placeholder="e.g. 0.375 in"></div>
+          <div class="field"><label for="fCirc">Pole circumference</label><input type="text" id="fCirc" inputmode="decimal" placeholder="e.g. 48 in"></div>
+        </div>
+        <div class="field"><label>Weld direction (how the FACE button counts)</label>
+          <div class="seg" id="fDir"><button type="button" data-v="up">Up: 1 &rarr; 12</button><button type="button" data-v="down">Down: 12 &rarr; 1</button></div></div>
+        <div class="field"><label>Start face (first pass)</label>
+          <div class="stepper"><button type="button" data-step="fStart" data-d="-1" aria-label="Start face minus one">&minus;</button><input type="number" id="fStart" min="1" max="12" class="mono"><button type="button" data-step="fStart" data-d="1" aria-label="Start face plus one">+</button></div></div>
+      </div>
+
+      <div class="panel">
+        <h2>Recorder clock</h2>
+        <div class="field"><label for="fClock">Time the unit will show</label><input type="text" id="fClock" class="mono" placeholder="HH:MM:SS" autocomplete="off"></div>
+        <button class="btn primary" type="button" id="btnSync" style="width:100%">Sync on this second</button>
+        <div class="note">Type a time a few seconds ahead of the unit's clock, then tap Sync the moment the unit shows it. Every log time is then shown in recorder time.</div>
+        <div class="note mono" id="syncState"></div>
+      </div>
+
+      <div class="panel">
+        <div class="field" style="margin:0"><label for="fNotes">Setup notes (optional)</label><textarea id="fNotes"></textarea></div>
+      </div>
+      <div style="margin-top:14px"><button class="btn primary" type="button" id="btnBegin" style="width:100%;padding:16px;font-size:17px">Begin session</button></div>
+    </section>
+  </main>
+
+  <!-- LIVE -->
+  <main id="vLive" hidden>
+    <section>
+      <div class="panel">
+        <div class="clockbig mono" id="bigClock">--:--:--.-</div>
+        <div class="clocklbl" id="clockLbl">Recorder time</div>
+        <div class="passline" id="passLine"></div>
+        <div class="facewrap">
+          <div class="facemeta" style="text-align:right"><b>Face</b><span id="dirLbl"></span></div>
+          <div class="facenum mono" id="faceNum">-</div>
+          <div class="facemeta"><b>Presses</b><span class="mono" id="pressCount">0 / 12</span></div>
+        </div>
+        <div class="faces" id="faceStrip"></div>
+        <div class="complete" id="layerDone" hidden>Layer complete. STOP, then Next pass.</div>
+      </div>
+
+      <button class="big start" type="button" id="bStartStop">START</button>
+      <button class="big face" type="button" id="bFace">FACE</button>
+      <div class="row2">
+        <button class="mid model" type="button" id="bModel">MODEL FLAG</button>
+        <button class="mid" type="button" id="bEvent">EVENT + NOTE</button>
+      </div>
+      <div class="row3">
+        <button class="btn" type="button" id="bUndo">Undo last</button>
+        <button class="btn" type="button" id="bPass">Next pass</button>
+        <button class="btn danger" type="button" id="bEnd">End session</button>
+      </div>
+    </section>
+    <section>
+      <h2>Log (tap a line to add a note or delete it)</h2>
+      <div class="panel" id="log"></div>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="btn" type="button" id="bShare">Share CSV</button>
+        <button class="btn" type="button" id="bCopy">Copy for Excel</button>
+        <button class="btn" type="button" id="bSetup">Edit setup</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h3 id="mTitle"></h3>
+    <div class="when" id="mWhen"></div>
+    <div id="mBody"></div>
+    <div class="mbtns"><button class="btn" type="button" id="mCancel">Cancel</button><button class="btn primary" type="button" id="mOk">Save</button></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+  var LS_KEY='daqprod.v1', VER='v2026-10-20a', DAY=86400000;
+  function $(id){return document.getElementById(id)}
+  function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
+  // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
+  function fmtTs(ms){ if(!ms) return ''; var d=new Date(ms);
+    return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1,2)+'-'+pad(d.getUTCDate(),2)+' '+pad(d.getUTCHours(),2)+':'+pad(d.getUTCMinutes(),2)+':'+pad(d.getUTCSeconds(),2)+'.'+pad(d.getUTCMilliseconds(),3)}
+  function fmtTod(ms,digits){var d=new Date(ms);var f=pad(d.getUTCMilliseconds(),3).slice(0,digits);
+    return pad(d.getUTCHours(),2)+':'+pad(d.getUTCMinutes(),2)+':'+pad(d.getUTCSeconds(),2)+(digits?'.'+f:'')}
+  function todayIso(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1,2)+'-'+pad(d.getDate(),2)}
+  function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+  var toastT; function toast(msg){var t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove('show')},2200)}
+  function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+
+  // A tap is timed at finger-down, not finger-up, so log times are as close to the real moment as possible.
+  var lastDown=0; document.addEventListener('pointerdown',function(){lastDown=Date.now()},true);
+  function tapTime(){var n=Date.now();return n-lastDown<1500?lastDown:n}
+
+  // ---- state ----
+  var state;
+  function load(){ try{var raw=localStorage.getItem(LS_KEY); if(raw){state=JSON.parse(raw)}}catch(e){}
+    if(!state||!state.sessions) state={sessions:[],active:null} }
+  function save(){ try{localStorage.setItem(LS_KEY,JSON.stringify(state))}catch(e){toast('Save failed: phone storage full or blocked')} }
+  function cur(){ for(var i=0;i<state.sessions.length;i++){ if(state.sessions[i].id===state.active) return state.sessions[i] } return null }
+  function blankSession(prev){ var p=prev||{};
+    var n=parseInt(p.num,10);
+    return {id:uid(),created:Date.now(),date:todayIso(),num:isNaN(n)?'':String(n+1),unit:p.unit||'',welder:p.welder||'',bay:p.bay||'',side:p.side||'',
+      thick:p.thick||'',circ:p.circ||'',dir:p.dir||'up',startFace:p.startFace||1,
+      clockReading:p.clockReading||'',clockPhone:p.clockPhone||null,offset:p.offset==null?null:p.offset,offsetFrom:p.offset==null?'':(p.offsetFrom||('session '+(p.num||'?'))),
+      notes:'',events:[]} }
+
+  function nextFace(f,dir){ return dir==='down'?(f===1?12:f-1):(f===12?1:f+1) }
+  function recTod(s,t,digits){ return s.offset==null?'':fmtTod(((t+s.offset)%DAY+DAY)%DAY,digits) }
+
+  // Face, pass and welding state are replayed from the event list, so undo/delete anywhere stays consistent.
+  function replay(s){
+    var st={passN:0,wfs:'',volts:'',face:null,welding:false,weldSince:null,done:{},presses:0,ended:false,rows:[]};
+    s.events.forEach(function(e){ var from='';
+      if(e.type==='PASS'){ st.passN++; st.wfs=e.wfs; st.volts=e.volts; st.face=+e.startFace; st.done={}; st.presses=0 }
+      else if(e.type==='START'){ st.welding=true; st.weldSince=e.t }
+      else if(e.type==='STOP'){ st.welding=false; st.weldSince=null }
+      else if(e.type==='FACE' && st.face!=null){ from=st.face; st.done[from]=1; st.presses++; st.face=nextFace(st.face,s.dir) }
+      else if(e.type==='END'){ st.ended=true }
+      st.rows.push({e:e,pass:st.passN||'',wfs:st.wfs,volts:st.volts,face:st.face==null?'':st.face,from:from,welding:st.welding});
+    });
+    return st }
+
+  var LABEL={PASS:'PASS_BEGIN',START:'START',STOP:'STOP',FACE:'FACE',MODEL:'MODEL_FLAG',NOTE:'EVENT',END:'SESSION_END'};
+  function describe(r){ var e=r.e;
+    if(e.type==='PASS') return 'Pass '+r.pass+' begins on face '+e.startFace+' · '+e.wfs+' WFS · '+e.volts+' V';
+    if(e.type==='FACE') return 'Face '+r.from+' → '+r.face;
+    if(e.type==='START') return 'START on face '+r.face;
+    if(e.type==='STOP') return 'STOP on face '+r.face;
+    if(e.type==='MODEL') return 'Model flag on face '+r.face;
+    if(e.type==='NOTE') return 'Event on face '+r.face+(e.tag?' · '+e.tag:'');
+    if(e.type==='END') return 'Session ended';
+    return e.type }
+
+  // ---- views ----
+  function show(v){ ['vSessions','vSetup','vLive'].forEach(function(id){ $(id).hidden=id!==v }); window.scrollTo(0,0);
+    if(v==='vLive') keepAwake(); else releaseAwake(); renderHeader(); tick() }
+  function renderHeader(){ var s=cur(); var inSess=$('vSessions').hidden&&!!s;
+    $('hdrTitle').textContent=inSess?('Session '+(s.num||'?')+' · Unit '+(s.unit||'?')):'DAQ Production';
+    $('hdrSub').textContent=inSess?((s.welder||'no welder')+' · Bay '+(s.bay||'?')+' · '+(s.side||'?')):(state.sessions.length+' session(s) on this phone') }
+
+  function renderSessions(){ var box=$('sessList'); box.innerHTML='';
+    if(!state.sessions.length){ box.appendChild(el('div','note','No sessions yet.')); return }
+    state.sessions.slice().reverse().forEach(function(s){ var st=replay(s);
+      var row=el('div','srow'), info=el('div','info');
+      info.appendChild(el('div','t','Session '+(s.num||'?')+' · Unit '+(s.unit||'?')+' · Bay '+(s.bay||'?')+' · '+(s.side||'?')));
+      info.appendChild(el('div','s',s.date+' · '+(s.welder||'no welder')+' · '+st.passN+' pass · '+s.events.length+' events'));
+      var tag=el('span','tag'+(st.ended?'':' open'),st.ended?'Ended':'Open');
+      var open=el('button','btn','Open'); open.type='button';
+      open.addEventListener('click',function(){ state.active=s.id; save(); openSession() });
+      var del=el('button','btn danger','Delete'); del.type='button';
+      del.addEventListener('click',function(){ if(!confirm('Delete session '+(s.num||'?')+' and its '+s.events.length+' events? This cannot be undone.')) return;
+        state.sessions=state.sessions.filter(function(x){return x.id!==s.id}); if(state.active===s.id) state.active=null; save(); renderSessions(); renderHeader() });
+      row.appendChild(info); row.appendChild(tag); row.appendChild(open); row.appendChild(del); box.appendChild(row) }) }
+
+  function openSession(){ var s=cur(); if(!s) return show('vSessions');
+    if(s.events.length){ renderLive(); show('vLive') } else { setupToForm(); show('vSetup') } }
+
+  // ---- setup ----
+  function segSet(id,v){ $(id).querySelectorAll('button').forEach(function(b){ b.setAttribute('aria-pressed',b.dataset.v===v?'true':'false') }) }
+  function segGet(id){ var b=$(id).querySelector('button[aria-pressed="true"]'); return b?b.dataset.v:'' }
+  document.querySelectorAll('.seg').forEach(function(seg){ seg.addEventListener('click',function(ev){ var b=ev.target.closest('button'); if(b) segSet(seg.id,b.dataset.v) }) });
+  document.querySelectorAll('[data-step]').forEach(function(b){ b.addEventListener('click',function(){ var i=$(b.dataset.step); var v=parseInt(i.value,10)||1; v+= +b.dataset.d; if(v<1)v=12; if(v>12)v=1; i.value=v }) });
+
+  function setupToForm(){ var s=cur();
+    $('fNum').value=s.num; $('fUnit').value=s.unit; $('fWelder').value=s.welder; $('fBay').value=s.bay;
+    segSet('fSide',s.side); $('fThick').value=s.thick; $('fCirc').value=s.circ; segSet('fDir',s.dir); $('fStart').value=s.startFace;
+    $('fClock').value=s.clockReading; $('fNotes').value=s.notes;
+    $('btnBegin').textContent=s.events.length?'Save and return to session':'Begin session' }
+  function formToSetup(){ var s=cur();
+    s.num=$('fNum').value.trim(); s.unit=$('fUnit').value.trim(); s.welder=$('fWelder').value.trim(); s.bay=$('fBay').value.trim();
+    s.side=segGet('fSide'); s.thick=$('fThick').value.trim(); s.circ=$('fCirc').value.trim(); s.dir=segGet('fDir')||'up';
+    var f=parseInt($('fStart').value,10); s.startFace=(f>=1&&f<=12)?f:1; s.notes=$('fNotes').value; save() }
+
+  function parseReading(str){ var m=String(str).trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2})(?:[.,](\d{1,3}))?)?\s*(am|pm)?$/i); if(!m) return null;
+    var h=+m[1],mi=+m[2],se=+(m[3]||0),ms=m[4]?Math.round(Number('0.'+m[4])*1000):0;
+    if(m[5]){ if(h>12) return null; if(h===12) h=0; if(/pm/i.test(m[5])) h+=12 }
+    if(h>23||mi>59||se>59) return null; return ((h*60+mi)*60+se)*1000+ms }
+  $('btnSync').addEventListener('click',function(){ var P=tapTime(), s=cur(); var R=parseReading($('fClock').value);
+    if(R==null){ $('fClock').parentNode.classList.add('need'); toast('Enter the unit time as HH:MM:SS'); return }
+    $('fClock').parentNode.classList.remove('need');
+    var d=R-(P%DAY); if(d>DAY/2) d-=DAY; if(d<=-DAY/2) d+=DAY;
+    s.offset=d; s.offsetFrom=''; s.clockReading=$('fClock').value.trim(); s.clockPhone=P; save(); tick(); toast('Synced to recorder clock') });
+  function syncText(s){ if(s.offset==null) return 'Not synced. Times will be phone UTC only.';
+    return (s.offsetFrom?'Carried over from '+s.offsetFrom+'. Re-sync if the unit was reset. ':'')+'Recorder now: '+recTod(s,Date.now(),1)+' (unit read '+s.clockReading+' at '+fmtTod(s.clockPhone,1)+' UTC)' }
+
+  $('btnBegin').addEventListener('click',function(){ formToSetup(); var s=cur(), miss=[];
+    [['fNum',s.num],['fUnit',s.unit],['fWelder',s.welder],['fBay',s.bay],['fSide',s.side],['fThick',s.thick],['fCirc',s.circ]].forEach(function(p){
+      var f=$(p[0]).closest('.field'); if(!p[1]){ miss.push(p[0]); f.classList.add('need') } else f.classList.remove('need') });
+    if(miss.length){ toast('Fill in the outlined fields'); return }
+    if(s.offset==null && !confirm('Recorder clock is not synced. Log times will be phone UTC only. Begin anyway?')) return;
+    if(s.events.length){ renderLive(); show('vLive'); return }
+    passModal(s.startFace,'','',function(){ renderLive(); show('vLive') }) });
+
+  // ---- live ----
+  function push(e){ var s=cur(); e.id=uid(); s.events.push(e); s.events.sort(function(a,b){return a.t-b.t}); save(); renderLive() }
+  function flash(b){ b.classList.add('hit'); setTimeout(function(){b.classList.remove('hit')},150); if(navigator.vibrate) try{navigator.vibrate(30)}catch(e){} }
+  // Ignore a second tap on the same button inside 400 ms (double-tap protection).
+  var guard={}; function once(id){ var n=Date.now(); if(guard[id]&&n-guard[id]<400) return false; guard[id]=n; return true }
+
+  function renderLive(){ var s=cur(); if(!s) return; var st=replay(s);
+    $('passLine').textContent=st.passN?('Pass '+st.passN+' · '+st.wfs+' WFS · '+st.volts+' V'):'No pass yet';
+    $('dirLbl').textContent=s.dir==='down'?'counting down':'counting up';
+    $('faceNum').textContent=st.face==null?'-':st.face;
+    $('pressCount').textContent=st.presses+' / 12';
+    var strip=$('faceStrip'); strip.innerHTML='';
+    for(var i=1;i<=12;i++){ strip.appendChild(el('div',(st.face===i?'now':(st.done[i]?'done':'')),String(i))) }
+    $('layerDone').hidden=st.presses<12;
+    var ss=$('bStartStop'); ss.className='big '+(st.welding?'stop':'start'); ss.disabled=st.ended||!st.passN;
+    ss.innerHTML=''; ss.appendChild(document.createTextNode(st.welding?'STOP':'START')); var sm=el('small','',''); sm.id='weldTimer'; ss.appendChild(sm);
+    var nf=st.face==null?'':nextFace(st.face,s.dir);
+    $('bFace').textContent=st.face==null?'FACE':('FACE  '+st.face+' → '+nf); $('bFace').disabled=st.ended||!st.passN;
+    $('bModel').disabled=$('bEvent').disabled=$('bPass').disabled=st.ended;
+    $('bEnd').textContent=st.ended?'Reopen':'End session'; $('bEnd').classList.toggle('danger',!st.ended);
+    $('bUndo').disabled=!s.events.length;
+    live.weldSince=st.weldSince;
+    var log=$('log'); log.innerHTML='';
+    if(!st.rows.length) log.appendChild(el('div','note','Nothing logged yet.'));
+    st.rows.slice().reverse().forEach(function(r){ var b=el('button','lrow'); b.type='button';
+      b.appendChild(el('span','lt',s.offset!=null?recTod(s,r.e.t,1):fmtTod(r.e.t,1)+'Z'));
+      b.appendChild(el('span','le',describe(r)));
+      if(r.e.note) b.appendChild(el('span','ln',r.e.note)); else if(r.e.type==='MODEL') b.appendChild(el('span','ln missing','Tap to add what the model showed'));
+      b.addEventListener('click',function(){ editModal(r) }); log.appendChild(b) });
+    renderHeader(); tick() }
+  var live={weldSince:null};
+
+  $('bStartStop').addEventListener('click',function(){ if(!once('ss')) return; var t=tapTime(), st=replay(cur()); if(st.ended||!st.passN) return;
+    flash(this); push({t:t,type:st.welding?'STOP':'START'}) });
+  $('bFace').addEventListener('click',function(){ if(!once('face')) return; var t=tapTime(), st=replay(cur()); if(st.ended||!st.passN) return;
+    flash(this); push({t:t,type:'FACE'}) });
+  $('bModel').addEventListener('click',function(){ if(!once('model')) return; var t=tapTime(); flash(this); push({t:t,type:'MODEL',note:''}); toast('Model flag logged. Tap it in the log to add detail.') });
+  $('bEvent').addEventListener('click',function(){ var t=tapTime(); noteModal(t) });
+  $('bPass').addEventListener('click',function(){ var s=cur(), st=replay(s); passModal(st.face==null?s.startFace:st.face,st.wfs,st.volts,null) });
+  $('bUndo').addEventListener('click',function(){ var s=cur(); if(!s.events.length) return; var st=replay(s), r=st.rows[st.rows.length-1];
+    if(!confirm('Undo: '+describe(r)+' at '+(recTod(s,r.e.t,1)||fmtTod(r.e.t,1)+' UTC')+'?')) return; s.events.pop(); save(); renderLive(); toast('Removed') });
+  $('bEnd').addEventListener('click',function(){ var s=cur(), st=replay(s), t=Date.now();
+    if(st.ended){ s.events=s.events.filter(function(e){return e.type!=='END'}); save(); renderLive(); toast('Session reopened'); return }
+    if(!confirm('End session '+(s.num||'?')+'?'+(st.welding?' A STOP will be logged now.':''))) return;
+    if(st.welding) s.events.push({id:uid(),t:t,type:'STOP'}); s.events.push({id:uid(),t:t,type:'END'}); save(); renderSessions(); show('vSessions'); toast('Session ended. Export from Sessions.') });
+  $('bSetup').addEventListener('click',function(){ setupToForm(); show('vSetup') });
+
+  // ---- modals ----
+  var onOk=null;
+  function openModal(title,when,body,okLabel,fn){ $('mTitle').textContent=title; $('mWhen').textContent=when; var mb=$('mBody'); mb.innerHTML=''; mb.appendChild(body);
+    $('mOk').textContent=okLabel||'Save'; onOk=fn; $('modal').hidden=false }
+  function closeModal(){ $('modal').hidden=true; onOk=null }
+  $('mCancel').addEventListener('click',closeModal);
+  $('mOk').addEventListener('click',function(){ if(onOk&&onOk()===false) return; closeModal() });
+  function whenText(t){ var s=cur(); return (s.offset!=null?'Recorder '+recTod(s,t,1)+' · ':'')+fmtTod(t,1)+' UTC' }
+  function fieldEl(label,input){ var f=el('div','field'); var l=el('label','',label); f.appendChild(l); f.appendChild(input); return f }
+  function noteArea(v){ var ta=document.createElement('textarea'); ta.value=v||''; return ta }
+
+  function noteModal(t){ var s=cur(), st=replay(s), body=el('div');
+    var seg=el('div','seg'); seg.id='mTag'; ['Grind out','Welder stop','Other'].forEach(function(x){ var b=el('button','',x); b.type='button'; b.dataset.v=x; b.setAttribute('aria-pressed','false'); seg.appendChild(b) });
+    seg.addEventListener('click',function(ev){ var b=ev.target.closest('button'); if(b) seg.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')}) });
+    var ta=noteArea(''); ta.placeholder='What happened? (required)';
+    body.appendChild(fieldEl('Type (optional)',seg)); var nf=fieldEl('Note',ta); body.appendChild(nf);
+    openModal('Event on face '+(st.face==null?'-':st.face),'Logged at the tap: '+whenText(t),body,'Log event',function(){
+      var note=ta.value.trim(); if(!note){ nf.classList.add('need'); ta.focus(); return false }
+      var b=seg.querySelector('button[aria-pressed="true"]'); push({t:t,type:'NOTE',tag:b?b.dataset.v:'',note:note}); toast('Event logged') });
+    setTimeout(function(){ta.focus()},50) }
+
+  function passModal(face,wfs,volts,after){ var s=cur(), st=replay(s), body=el('div');
+    var g=el('div','grid2'); var iw=document.createElement('input'); iw.type='text'; iw.inputMode='decimal'; iw.value=wfs||'';
+    var iv=document.createElement('input'); iv.type='text'; iv.inputMode='decimal'; iv.value=volts||'';
+    var fw=fieldEl('WFS',iw), fv=fieldEl('Voltage',iv); g.appendChild(fw); g.appendChild(fv); body.appendChild(g);
+    var stp=el('div','stepper'); var mi=el('button','','−'), pl=el('button','','+'); mi.type=pl.type='button';
+    var fi=document.createElement('input'); fi.type='number'; fi.min=1; fi.max=12; fi.className='mono'; fi.value=face||1;
+    mi.addEventListener('click',function(){ var v=(parseInt(fi.value,10)||1)-1; fi.value=v<1?12:v });
+    pl.addEventListener('click',function(){ var v=(parseInt(fi.value,10)||1)+1; fi.value=v>12?1:v });
+    stp.appendChild(mi); stp.appendChild(fi); stp.appendChild(pl); body.appendChild(fieldEl('Starts on face',stp));
+    if(st.welding) body.appendChild(el('div','note','Welding is still running. It will keep running into the new pass unless you tap STOP.'));
+    openModal('Pass '+(st.passN+1),'WFS and voltage for this layer',body,'Begin pass '+(st.passN+1),function(){
+      var ok=true; [[fw,iw],[fv,iv]].forEach(function(p){ if(!p[1].value.trim()){ p[0].classList.add('need'); ok=false } else p[0].classList.remove('need') });
+      var f=parseInt(fi.value,10); if(!(f>=1&&f<=12)){ toast('Face must be 1 to 12'); return false }
+      if(!ok) return false;
+      push({t:Date.now(),type:'PASS',wfs:iw.value.trim(),volts:iv.value.trim(),startFace:f}); if(after) after() });
+    setTimeout(function(){ if(!iw.value) iw.focus() },50) }
+
+  function editModal(r){ var s=cur(), body=el('div'), ta=noteArea(r.e.note);
+    ta.placeholder=r.e.type==='MODEL'?'What did the model show? (flash / screen, call)':'Note';
+    body.appendChild(fieldEl('Note',ta));
+    var del=el('button','btn danger','Delete this entry'); del.type='button'; del.style.width='100%';
+    del.addEventListener('click',function(){ if(!confirm('Delete "'+describe(r)+'"? Faces after it will be recounted.')) return;
+      s.events=s.events.filter(function(e){return e.id!==r.e.id}); save(); closeModal(); renderLive(); toast('Deleted') });
+    body.appendChild(del);
+    openModal(describe(r),whenText(r.e.t),body,'Save note',function(){
+      var v=ta.value.trim(); if(r.e.type==='NOTE'&&!v){ toast('Events need a note'); return false }
+      r.e.note=v; save(); renderLive() }) }
+
+  // ---- export ----
+  var COLS=['session_date','session','unit','welder','bay','pole_side','material_thickness','pole_circumference','weld_direction','first_start_face',
+    'recorder_clock_reading','phone_time_at_sync_utc','recorder_offset_s','setup_notes',
+    'event_no','event','pass','wfs','volts','face','from_face','welding_after','recorder_time','phone_time_utc','elapsed_s','event_type','note'];
+  function rows(list){ var out=[]; list.forEach(function(s){ var st=replay(s), t0=s.events.length?s.events[0].t:0;
+    st.rows.forEach(function(r,i){ out.push([s.date,s.num,s.unit,s.welder,s.bay,s.side,s.thick,s.circ,s.dir,s.startFace,
+      s.clockReading,s.clockPhone?fmtTs(s.clockPhone):'',s.offset==null?'':(s.offset/1000).toFixed(3),s.notes,
+      i+1,LABEL[r.e.type]||r.e.type,r.pass,r.wfs,r.volts,r.face,r.from,r.welding?'yes':'no',recTod(s,r.e.t,3),fmtTs(r.e.t),((r.e.t-t0)/1000).toFixed(3),r.e.tag||'',r.e.note||'']) }) });
+    return out }
+  function csvCell(v){v=String(v==null?'':v);return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+  function tsvCell(v){return String(v==null?'':v).replace(/[\t\n\r]+/g,' ')}
+  function toCsv(list){return [COLS.join(',')].concat(rows(list).map(function(r){return r.map(csvCell).join(',')})).join('\r\n')+'\r\n'}
+  function toTsv(list){return [COLS.join('\t')].concat(rows(list).map(function(r){return r.map(tsvCell).join('\t')})).join('\n')}
+  function download(text,name,type){ var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:type})); a.download=name; document.body.appendChild(a); a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000) }
+  function shareFile(text,name,type){ var f; try{ f=new File([text],name,{type:type}) }catch(e){}
+    if(f&&navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})) return navigator.share({files:[f],title:name}).catch(function(e){ if(!e||e.name!=='AbortError') download(text,name,type) });
+    download(text,name,type) }
+  function copyText(t){ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function(){toast('Copied. Paste into cell A1 in Excel.')},function(){toast('Copy failed. Use Share CSV.')}); else toast('Copy not available. Use Share CSV.') }
+  function sessName(s){ return 'daq-session-'+(s.num||'x')+'-unit-'+(s.unit||'x')+'-'+s.date+'.csv' }
+  $('bShare').addEventListener('click',function(){ var s=cur(); shareFile(toCsv([s]),sessName(s),'text/csv') });
+  $('bCopy').addEventListener('click',function(){ copyText(toTsv([cur()])) });
+  $('btnShareAll').addEventListener('click',function(){ if(!state.sessions.length) return toast('No sessions yet'); shareFile(toCsv(state.sessions),'daq-all-sessions-'+todayIso()+'.csv','text/csv') });
+  $('btnCopyAll').addEventListener('click',function(){ if(!state.sessions.length) return toast('No sessions yet'); copyText(toTsv(state.sessions)) });
+  $('btnBackup').addEventListener('click',function(){ var json=JSON.stringify({app:'daqprod',version:1,exported:fmtTs(Date.now())+' UTC',state:state});
+    shareFile(json,'daq-prod-backup-'+fmtTs(Date.now()).slice(0,16).replace(/[ :]/g,'-')+'.json','application/json') });
+  $('btnRestore').addEventListener('click',function(){ $('fileRestore').click() });
+  $('fileRestore').addEventListener('change',function(){ var f=this.files&&this.files[0]; this.value=''; if(!f) return;
+    f.text().then(function(t){ var b=JSON.parse(t); if(!b||b.app!=='daqprod'||!b.state||!b.state.sessions) throw new Error('bad');
+      var have={}; state.sessions.forEach(function(s){have[s.id]=1}); var added=0;
+      b.state.sessions.forEach(function(s){ if(!have[s.id]){ state.sessions.push(s); added++ } }); save(); renderSessions(); renderHeader();
+      toast(added?('Restored '+added+' session(s)'):'Nothing new in that backup') }).catch(function(){ toast('That file is not a DAQ Production backup') }) });
+
+  // ---- nav ----
+  $('btnSessions').addEventListener('click',function(){ if(!$('vSetup').hidden && cur()) formToSetup(); renderSessions(); show('vSessions') });
+  $('btnNew').addEventListener('click',function(){ var prev=state.sessions[state.sessions.length-1]; var s=blankSession(prev);
+    state.sessions.push(s); state.active=s.id; save(); setupToForm(); show('vSetup') });
+
+  // ---- keep screen awake on the live view ----
+  var wl=null;
+  function keepAwake(){ if(navigator.wakeLock&&!wl) navigator.wakeLock.request('screen').then(function(l){ wl=l; l.addEventListener('release',function(){ wl=null }) }).catch(function(){}) }
+  function releaseAwake(){ if(wl){ wl.release().catch(function(){}); wl=null } }
+  document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible'&&!$('vLive').hidden) keepAwake() });
+
+  // ---- clock tick ----
+  function tick(){ var n=Date.now(), s=cur();
+    $('hdrClock').textContent=fmtTod(n,0)+' UTC';
+    if(!$('vLive').hidden&&s){ if(s.offset!=null){ $('bigClock').textContent=recTod(s,n,1); $('clockLbl').textContent='Recorder time'; $('clockLbl').className='clocklbl' }
+      else { $('bigClock').textContent=fmtTod(n,1); $('clockLbl').textContent='UTC · recorder not synced'; $('clockLbl').className='clocklbl warn' }
+      var wt=$('weldTimer'); if(wt) wt.textContent=live.weldSince?('welding '+((n-live.weldSince)/1000).toFixed(0)+' s'):'' }
+    if(!$('vSetup').hidden&&s) $('syncState').textContent=syncText(s) }
+  setInterval(tick,100);
+
+  $('ver').textContent=VER;
+  if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(function(){});
+  load(); renderSessions();
+  if(cur()&&cur().events.length&&!replay(cur()).ended){ renderLive(); show('vLive') } else show('vSessions');
+})();
+</script>
+</body>
+</html>
