@@ -272,7 +272,7 @@ textarea{min-height:80px;resize:vertical}
 
 <script>
 (function(){
-  var LS_KEY='daqprod.v1', VER='v2026-10-21c', DAY=86400000;
+  var LS_KEY='daqprod.v1', VER='v2026-10-21d', DAY=86400000;
   function $(id){return document.getElementById(id)}
   function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
   // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
@@ -486,14 +486,17 @@ textarea{min-height:80px;resize:vertical}
   function fieldEl(label,input){ var f=el('div','field'); var l=el('label','',label); f.appendChild(l); f.appendChild(input); return f }
   function noteArea(v){ var ta=document.createElement('textarea'); ta.value=v||''; return ta }
 
-  function noteModal(t){ var s=cur(), st=replay(s), body=el('div');
-    var seg=el('div','seg'); seg.id='mTag'; ['Grind out','Welder stop','Other'].forEach(function(x){ var b=el('button','',x); b.type='button'; b.dataset.v=x; b.setAttribute('aria-pressed','false'); seg.appendChild(b) });
+  // Event type chips: tap to pick, tap the picked one again to clear.
+  function tagSeg(cur){ var seg=el('div','seg'); seg.id='mTag'; ['Grind out','Welder stop','Other'].forEach(function(x){ var b=el('button','',x); b.type='button'; b.dataset.v=x; b.setAttribute('aria-pressed',x===cur?'true':'false'); seg.appendChild(b) });
     seg.addEventListener('click',function(ev){ var b=ev.target.closest('button'); if(!b) return; var was=b.getAttribute('aria-pressed')==='true'; seg.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',(x===b&&!was)?'true':'false')}) });
+    return seg }
+  function tagGet(seg){ var b=seg.querySelector('button[aria-pressed="true"]'); return b?b.dataset.v:'' }
+  function noteModal(t){ var s=cur(), st=replay(s), body=el('div'), seg=tagSeg('');
     var ta=noteArea(''); ta.placeholder='What happened? (optional, can add later from the log)';
     body.appendChild(fieldEl('Type (optional)',seg)); var nf=fieldEl('Note',ta); body.appendChild(nf);
     openModal('Event on face '+(st.face==null?'-':st.face),'Logged at the tap: '+whenText(t),body,'Log event',function(){
       var note=ta.value.trim();
-      var b=seg.querySelector('button[aria-pressed="true"]'); push({t:t,type:'NOTE',tag:b?b.dataset.v:'',note:note}); toast(note?'Event logged':'Event logged. Tap it in the log to add a note.') });
+      push({t:t,type:'NOTE',tag:tagGet(seg),note:note}); toast(note?'Event logged':'Event logged. Tap it in the log to add a note.') });
     setTimeout(function(){ta.focus()},50) }
 
   function passModal(face,wfs,volts,after){ var s=cur(), st=replay(s), body=el('div');
@@ -515,6 +518,8 @@ textarea{min-height:80px;resize:vertical}
 
   function editModal(r){ var s=cur(), body=el('div'), ta=noteArea(r.e.note);
     ta.placeholder=r.e.type==='MODEL'?'What did the model show? (flash / screen, call)':'Note';
+    var seg=r.e.type==='NOTE'?tagSeg(r.e.tag||''):null;
+    if(seg) body.appendChild(fieldEl('Type (optional)',seg));
     body.appendChild(fieldEl('Note',ta));
     var del=el('button','btn danger','Delete this entry'); del.type='button'; del.style.width='100%';
     del.addEventListener('click',function(){ if(!confirm('Delete "'+describe(r)+'"? Faces after it will be recounted.')) return;
@@ -522,7 +527,7 @@ textarea{min-height:80px;resize:vertical}
     body.appendChild(del);
     openModal(describe(r),whenText(r.e.t),body,'Save note',function(){
       var v=ta.value.trim();
-      r.e.note=v; save(); renderLive() }) }
+      r.e.note=v; if(seg) r.e.tag=tagGet(seg); save(); renderLive() }) }
 
   // ---- export ----
   var COLS=['session_date','session','unit','welder','bay','pole_side','material_thickness','pole_circumference','traveler_photos','weld_direction','first_start_face',
