@@ -19,7 +19,8 @@ address. The old data stays under the old URL and is not migrated automatically.
 ## Production logger (`production.html`)
 
 Live session logger for production welds. One session = one recording-unit on/off. Setup once
-(welder, bay, side, thickness, circumference, direction, session #, unit #), sync to the recorder
-clock, then per pass: WFS/volts, START/STOP, FACE (counts in the setup direction, 12 presses = one
-layer), MODEL FLAG (timestamp + face, detail added later), EVENT (note required). Exports one CSV
+(welder, bay, side, thickness + circumference typed or "see traveler" with up to 4 photos, direction,
+session #, unit #), sync to the recorder
+clock, then per pass: WFS/volts, START/STOP, FACE (counts in the setup direction, 12 presses = one pass,
+one weld around all 12 faces), MODEL FLAG (timestamp + face, detail added later), EVENT (note required). Exports one CSV
 row per event with recorder time and UTC. Uses its own storage key, so it does not touch `index.html` data.

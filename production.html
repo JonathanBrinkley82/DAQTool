@@ -72,6 +72,12 @@ textarea{min-height:80px;resize:vertical}
 .btn.danger{color:var(--bad);border-color:var(--bad)}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap}
 .btnrow .btn{flex:1;min-width:120px}
+.thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
+.thumbs:empty{display:none}
+.thumb{position:relative}
+.thumb img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
+.thumb button{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:6px;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:14px}
+.fullimg{width:100%;border-radius:8px;display:block}
 .need{outline:2px solid var(--bad);outline-offset:2px;border-radius:10px}
 
 /* sessions list */
@@ -177,9 +183,17 @@ textarea{min-height:80px;resize:vertical}
         </div>
         <div class="field"><label>Side of pole</label>
           <div class="seg" id="fSide"><button type="button" data-v="top">Top</button><button type="button" data-v="bottom">Bottom</button></div></div>
-        <div class="grid2">
+        <div class="field"><label>Material thickness &amp; pole circumference</label>
+          <div class="seg" id="fDims"><button type="button" data-v="values">Enter values</button><button type="button" data-v="traveler">See traveler (photo)</button></div></div>
+        <div class="grid2" id="dimsValues">
           <div class="field"><label for="fThick">Material thickness</label><input type="text" id="fThick" inputmode="decimal" placeholder="e.g. 0.375 in"></div>
           <div class="field"><label for="fCirc">Pole circumference</label><input type="text" id="fCirc" inputmode="decimal" placeholder="e.g. 48 in"></div>
+        </div>
+        <div class="field" id="dimsTraveler" hidden>
+          <div class="thumbs" id="thumbs"></div>
+          <button class="btn" type="button" id="btnTravPhoto" style="width:100%">+ Take traveler photo</button>
+          <input type="file" id="fTravPhoto" accept="image/*" capture="environment" hidden>
+          <div class="note">Up to 4 photos. Make sure thickness and circumference are readable. Tap a photo to check it.</div>
         </div>
         <div class="field"><label>Weld direction (how the FACE button counts)</label>
           <div class="seg" id="fDir"><button type="button" data-v="up">Up: 1 &rarr; 12</button><button type="button" data-v="down">Down: 12 &rarr; 1</button></div></div>
@@ -215,7 +229,7 @@ textarea{min-height:80px;resize:vertical}
           <div class="facemeta"><b>Presses</b><span class="mono" id="pressCount">0 / 12</span></div>
         </div>
         <div class="faces" id="faceStrip"></div>
-        <div class="complete" id="layerDone" hidden>Layer complete. STOP, then Next pass.</div>
+        <div class="complete" id="passDone" hidden>Pass complete: all 12 faces done. STOP, then Next pass.</div>
       </div>
 
       <button class="big start" type="button" id="bStartStop">START</button>
@@ -254,7 +268,7 @@ textarea{min-height:80px;resize:vertical}
 
 <script>
 (function(){
-  var LS_KEY='daqprod.v1', VER='v2026-10-20a', DAY=86400000;
+  var LS_KEY='daqprod.v1', VER='v2026-10-20b', DAY=86400000;
   function $(id){return document.getElementById(id)}
   function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
   // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
@@ -280,7 +294,7 @@ textarea{min-height:80px;resize:vertical}
   function blankSession(prev){ var p=prev||{};
     var n=parseInt(p.num,10);
     return {id:uid(),created:Date.now(),date:todayIso(),num:isNaN(n)?'':String(n+1),unit:p.unit||'',welder:p.welder||'',bay:p.bay||'',side:p.side||'',
-      thick:p.thick||'',circ:p.circ||'',dir:p.dir||'up',startFace:p.startFace||1,
+      dims:p.dims||'values',photos:[],thick:p.thick||'',circ:p.circ||'',dir:p.dir||'up',startFace:p.startFace||1,
       clockReading:p.clockReading||'',clockPhone:p.clockPhone||null,offset:p.offset==null?null:p.offset,offsetFrom:p.offset==null?'':(p.offsetFrom||('session '+(p.num||'?'))),
       notes:'',events:[]} }
 
@@ -329,6 +343,7 @@ textarea{min-height:80px;resize:vertical}
       open.addEventListener('click',function(){ state.active=s.id; save(); openSession() });
       var del=el('button','btn danger','Delete'); del.type='button';
       del.addEventListener('click',function(){ if(!confirm('Delete session '+(s.num||'?')+' and its '+s.events.length+' events? This cannot be undone.')) return;
+        (s.photos||[]).forEach(function(p){ photoDel(p.id) });
         state.sessions=state.sessions.filter(function(x){return x.id!==s.id}); if(state.active===s.id) state.active=null; save(); renderSessions(); renderHeader() });
       row.appendChild(info); row.appendChild(tag); row.appendChild(open); row.appendChild(del); box.appendChild(row) }) }
 
@@ -343,13 +358,47 @@ textarea{min-height:80px;resize:vertical}
 
   function setupToForm(){ var s=cur();
     $('fNum').value=s.num; $('fUnit').value=s.unit; $('fWelder').value=s.welder; $('fBay').value=s.bay;
-    segSet('fSide',s.side); $('fThick').value=s.thick; $('fCirc').value=s.circ; segSet('fDir',s.dir); $('fStart').value=s.startFace;
-    $('fClock').value=s.clockReading; $('fNotes').value=s.notes;
+    segSet('fSide',s.side); segSet('fDims',s.dims||'values'); $('fThick').value=s.thick; $('fCirc').value=s.circ; segSet('fDir',s.dir); $('fStart').value=s.startFace;
+    $('fClock').value=s.clockReading; $('fNotes').value=s.notes; dimsView(); renderThumbs();
     $('btnBegin').textContent=s.events.length?'Save and return to session':'Begin session' }
   function formToSetup(){ var s=cur();
     s.num=$('fNum').value.trim(); s.unit=$('fUnit').value.trim(); s.welder=$('fWelder').value.trim(); s.bay=$('fBay').value.trim();
-    s.side=segGet('fSide'); s.thick=$('fThick').value.trim(); s.circ=$('fCirc').value.trim(); s.dir=segGet('fDir')||'up';
+    s.side=segGet('fSide'); s.dims=segGet('fDims')||'values'; s.thick=$('fThick').value.trim(); s.circ=$('fCirc').value.trim(); s.dir=segGet('fDir')||'up';
     var f=parseInt($('fStart').value,10); s.startFace=(f>=1&&f<=12)?f:1; s.notes=$('fNotes').value; save() }
+
+  // ---- traveler photos (IndexedDB; localStorage is too small for images) ----
+  var MAXPH=4, idbP;
+  function idb(){ if(idbP) return idbP; idbP=new Promise(function(res,rej){ try{ var r=indexedDB.open('daqprod',1);
+    r.onupgradeneeded=function(){ r.result.createObjectStore('photos') }; r.onsuccess=function(){ res(r.result) }; r.onerror=function(){ rej(r.error) } }catch(e){ rej(e) } }); return idbP }
+  function photoPut(id,blob){ return idb().then(function(db){ return new Promise(function(res,rej){ var t=db.transaction('photos','readwrite'); t.objectStore('photos').put(blob,id); t.oncomplete=res; t.onerror=function(){ rej(t.error) } }) }) }
+  function photoGet(id){ return idb().then(function(db){ return new Promise(function(res,rej){ var r=db.transaction('photos').objectStore('photos').get(id); r.onsuccess=function(){ res(r.result||null) }; r.onerror=function(){ rej(r.error) } }) }) }
+  function photoDel(id){ return idb().then(function(db){ return new Promise(function(res){ var t=db.transaction('photos','readwrite'); t.objectStore('photos').delete(id); t.oncomplete=res; t.onerror=res }) }).catch(function(){}) }
+  function processFile(file){ return new Promise(function(res,rej){ var url=URL.createObjectURL(file); var img=new Image();
+    img.onload=function(){ try{ var MAX=2000, sc=Math.min(1,MAX/Math.max(img.width,img.height)); var c=document.createElement('canvas'); c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      var T=240, ts=Math.min(1,T/Math.max(c.width,c.height)); var tc=document.createElement('canvas'); tc.width=Math.round(c.width*ts); tc.height=Math.round(c.height*ts); tc.getContext('2d').drawImage(c,0,0,tc.width,tc.height);
+      var thumb=tc.toDataURL('image/jpeg',0.7);
+      c.toBlob(function(b){ URL.revokeObjectURL(url); if(!b) rej(new Error('encode')); else res({blob:b,thumb:thumb}) },'image/jpeg',0.85) }catch(e){ URL.revokeObjectURL(url); rej(e) } };
+    img.onerror=function(){ URL.revokeObjectURL(url); rej(new Error('load')) }; img.src=url }) }
+  function photoName(s,i){ return 'daq-session-'+(s.num||'x')+'-unit-'+(s.unit||'x')+'-'+s.date+'-traveler-'+(i+1)+'.jpg' }
+  function dimsView(){ var t=segGet('fDims')==='traveler'; $('dimsValues').hidden=t; $('dimsTraveler').hidden=!t }
+  $('fDims').addEventListener('click',dimsView);
+  function renderThumbs(){ var s=cur(), box=$('thumbs'); box.innerHTML=''; var ph=s.photos||[];
+    ph.forEach(function(p,i){ var d=el('div','thumb'), im=document.createElement('img'); im.src=p.thumb; im.alt='Traveler photo '+(i+1);
+      im.addEventListener('click',function(){ photoGet(p.id).then(function(b){ if(!b) return toast('Photo missing on this phone'); var full=document.createElement('img'); full.className='fullimg'; full.src=URL.createObjectURL(b);
+        openModal('Traveler photo '+(i+1),'',full,'Close',null) }) });
+      var x=el('button','','✕'); x.type='button'; x.setAttribute('aria-label','Remove photo '+(i+1));
+      x.addEventListener('click',function(){ if(!confirm('Remove traveler photo '+(i+1)+'?')) return; s.photos=ph.filter(function(q){return q.id!==p.id}); save(); photoDel(p.id); renderThumbs() });
+      d.appendChild(im); d.appendChild(x); box.appendChild(d) });
+    $('btnTravPhoto').disabled=ph.length>=MAXPH;
+    $('btnTravPhoto').textContent=ph.length>=MAXPH?'4 of 4 photos taken':'+ Take traveler photo ('+ph.length+' of 4)' }
+  $('btnTravPhoto').addEventListener('click',function(){ $('fTravPhoto').click() });
+  $('fTravPhoto').addEventListener('change',function(){ var f=this.files&&this.files[0]; this.value=''; var s=cur(); if(!f||!s) return;
+    if((s.photos||[]).length>=MAXPH) return toast('4 photos max');
+    toast('Saving photo...');
+    processFile(f).then(function(p){ var id=uid(); return photoPut(id,p.blob).then(function(){ s.photos=(s.photos||[]).concat([{id:id,thumb:p.thumb}]); save(); renderThumbs();
+      $('dimsTraveler').classList.remove('need'); toast('Traveler photo '+s.photos.length+' saved') }) })
+    .catch(function(e){ toast('Photo failed: '+((e&&(e.name||e.message))||'unknown')) }) });
 
   function parseReading(str){ var m=String(str).trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2})(?:[.,](\d{1,3}))?)?\s*(am|pm)?$/i); if(!m) return null;
     var h=+m[1],mi=+m[2],se=+(m[3]||0),ms=m[4]?Math.round(Number('0.'+m[4])*1000):0;
@@ -364,8 +413,10 @@ textarea{min-height:80px;resize:vertical}
     return (s.offsetFrom?'Carried over from '+s.offsetFrom+'. Re-sync if the unit was reset. ':'')+'Recorder now: '+recTod(s,Date.now(),1)+' (unit read '+s.clockReading+' at '+fmtTod(s.clockPhone,1)+' UTC)' }
 
   $('btnBegin').addEventListener('click',function(){ formToSetup(); var s=cur(), miss=[];
-    [['fNum',s.num],['fUnit',s.unit],['fWelder',s.welder],['fBay',s.bay],['fSide',s.side],['fThick',s.thick],['fCirc',s.circ]].forEach(function(p){
+    var trav=s.dims==='traveler';
+    [['fNum',s.num],['fUnit',s.unit],['fWelder',s.welder],['fBay',s.bay],['fSide',s.side],['fThick',trav||s.thick],['fCirc',trav||s.circ]].forEach(function(p){
       var f=$(p[0]).closest('.field'); if(!p[1]){ miss.push(p[0]); f.classList.add('need') } else f.classList.remove('need') });
+    if(trav&&!(s.photos||[]).length){ miss.push('photos'); $('dimsTraveler').classList.add('need') } else $('dimsTraveler').classList.remove('need');
     if(miss.length){ toast('Fill in the outlined fields'); return }
     if(s.offset==null && !confirm('Recorder clock is not synced. Log times will be phone UTC only. Begin anyway?')) return;
     if(s.events.length){ renderLive(); show('vLive'); return }
@@ -384,7 +435,7 @@ textarea{min-height:80px;resize:vertical}
     $('pressCount').textContent=st.presses+' / 12';
     var strip=$('faceStrip'); strip.innerHTML='';
     for(var i=1;i<=12;i++){ strip.appendChild(el('div',(st.face===i?'now':(st.done[i]?'done':'')),String(i))) }
-    $('layerDone').hidden=st.presses<12;
+    $('passDone').hidden=st.presses<12;
     var ss=$('bStartStop'); ss.className='big '+(st.welding?'stop':'start'); ss.disabled=st.ended||!st.passN;
     ss.innerHTML=''; ss.appendChild(document.createTextNode(st.welding?'STOP':'START')); var sm=el('small','',''); sm.id='weldTimer'; ss.appendChild(sm);
     var nf=st.face==null?'':nextFace(st.face,s.dir);
@@ -449,7 +500,7 @@ textarea{min-height:80px;resize:vertical}
     pl.addEventListener('click',function(){ var v=(parseInt(fi.value,10)||1)+1; fi.value=v>12?1:v });
     stp.appendChild(mi); stp.appendChild(fi); stp.appendChild(pl); body.appendChild(fieldEl('Starts on face',stp));
     if(st.welding) body.appendChild(el('div','note','Welding is still running. It will keep running into the new pass unless you tap STOP.'));
-    openModal('Pass '+(st.passN+1),'WFS and voltage for this layer',body,'Begin pass '+(st.passN+1),function(){
+    openModal('Pass '+(st.passN+1),'One weld all the way around all 12 faces',body,'Begin pass '+(st.passN+1),function(){
       var ok=true; [[fw,iw],[fv,iv]].forEach(function(p){ if(!p[1].value.trim()){ p[0].classList.add('need'); ok=false } else p[0].classList.remove('need') });
       var f=parseInt(fi.value,10); if(!(f>=1&&f<=12)){ toast('Face must be 1 to 12'); return false }
       if(!ok) return false;
@@ -468,11 +519,12 @@ textarea{min-height:80px;resize:vertical}
       r.e.note=v; save(); renderLive() }) }
 
   // ---- export ----
-  var COLS=['session_date','session','unit','welder','bay','pole_side','material_thickness','pole_circumference','weld_direction','first_start_face',
+  var COLS=['session_date','session','unit','welder','bay','pole_side','material_thickness','pole_circumference','traveler_photos','weld_direction','first_start_face',
     'recorder_clock_reading','phone_time_at_sync_utc','recorder_offset_s','setup_notes',
     'event_no','event','pass','wfs','volts','face','from_face','welding_after','recorder_time','phone_time_utc','elapsed_s','event_type','note'];
-  function rows(list){ var out=[]; list.forEach(function(s){ var st=replay(s), t0=s.events.length?s.events[0].t:0;
-    st.rows.forEach(function(r,i){ out.push([s.date,s.num,s.unit,s.welder,s.bay,s.side,s.thick,s.circ,s.dir,s.startFace,
+  function rows(list){ var out=[]; list.forEach(function(s){ var st=replay(s), t0=s.events.length?s.events[0].t:0, trav=s.dims==='traveler';
+    var phn=(s.photos||[]).map(function(p,i){ return photoName(s,i) }).join('; ');
+    st.rows.forEach(function(r,i){ out.push([s.date,s.num,s.unit,s.welder,s.bay,s.side,trav?'see traveler':s.thick,trav?'see traveler':s.circ,phn,s.dir,s.startFace,
       s.clockReading,s.clockPhone?fmtTs(s.clockPhone):'',s.offset==null?'':(s.offset/1000).toFixed(3),s.notes,
       i+1,LABEL[r.e.type]||r.e.type,r.pass,r.wfs,r.volts,r.face,r.from,r.welding?'yes':'no',recTod(s,r.e.t,3),fmtTs(r.e.t),((r.e.t-t0)/1000).toFixed(3),r.e.tag||'',r.e.note||'']) }) });
     return out }
@@ -480,25 +532,42 @@ textarea{min-height:80px;resize:vertical}
   function tsvCell(v){return String(v==null?'':v).replace(/[\t\n\r]+/g,' ')}
   function toCsv(list){return [COLS.join(',')].concat(rows(list).map(function(r){return r.map(csvCell).join(',')})).join('\r\n')+'\r\n'}
   function toTsv(list){return [COLS.join('\t')].concat(rows(list).map(function(r){return r.map(tsvCell).join('\t')})).join('\n')}
-  function download(text,name,type){ var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:type})); a.download=name; document.body.appendChild(a); a.click();
-    setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000) }
-  function shareFile(text,name,type){ var f; try{ f=new File([text],name,{type:type}) }catch(e){}
-    if(f&&navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})) return navigator.share({files:[f],title:name}).catch(function(e){ if(!e||e.name!=='AbortError') download(text,name,type) });
-    download(text,name,type) }
+  function downloadAll(files){ files.forEach(function(f,i){ setTimeout(function(){ var a=document.createElement('a'); a.href=URL.createObjectURL(f); a.download=f.name; document.body.appendChild(a); a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000) },i*300) }) }
+  // Safari only opens the share sheet straight from a tap. If loading photos took too long, ask for one more tap.
+  function shareFiles(files){
+    if(!(navigator.share&&navigator.canShare&&navigator.canShare({files:files}))) return downloadAll(files);
+    navigator.share({files:files}).catch(function(e){ if(e&&e.name==='AbortError') return;
+      if(e&&e.name==='NotAllowedError') return openModal('Files ready',files.length+' file(s)',el('div','note','Tap Share to send them.'),'Share',function(){
+        navigator.share({files:files}).catch(function(e2){ if(!e2||e2.name!=='AbortError') downloadAll(files) }) });
+      downloadAll(files) }) }
+  function shareFile(text,name,type){ shareFiles([new File([text],name,{type:type})]) }
+  // CSV plus each session's traveler photos, named to match the traveler_photos column.
+  function shareWithPhotos(list,csvName){ var csv=new File([toCsv(list)],csvName,{type:'text/csv'}), jobs=[];
+    list.forEach(function(s){ (s.photos||[]).forEach(function(p,i){ jobs.push(photoGet(p.id).then(function(b){ return b?new File([b],photoName(s,i),{type:'image/jpeg'}):null })) }) });
+    if(!jobs.length) return shareFiles([csv]);
+    Promise.all(jobs).then(function(fs){ shareFiles([csv].concat(fs.filter(Boolean))) }).catch(function(){ toast('Could not read photos. Sharing CSV only.'); shareFiles([csv]) }) }
+  function blobToDataUrl(b){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){ res(r.result) }; r.onerror=function(){ rej(r.error) }; r.readAsDataURL(b) }) }
+  function dataUrlToBlob(u){ var m=String(u).match(/^data:([^;]+);base64,(.*)$/); if(!m) return null; var bin=atob(m[2]), a=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return new Blob([a],{type:m[1]}) }
   function copyText(t){ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function(){toast('Copied. Paste into cell A1 in Excel.')},function(){toast('Copy failed. Use Share CSV.')}); else toast('Copy not available. Use Share CSV.') }
   function sessName(s){ return 'daq-session-'+(s.num||'x')+'-unit-'+(s.unit||'x')+'-'+s.date+'.csv' }
-  $('bShare').addEventListener('click',function(){ var s=cur(); shareFile(toCsv([s]),sessName(s),'text/csv') });
+  $('bShare').addEventListener('click',function(){ var s=cur(); shareWithPhotos([s],sessName(s)) });
   $('bCopy').addEventListener('click',function(){ copyText(toTsv([cur()])) });
-  $('btnShareAll').addEventListener('click',function(){ if(!state.sessions.length) return toast('No sessions yet'); shareFile(toCsv(state.sessions),'daq-all-sessions-'+todayIso()+'.csv','text/csv') });
+  $('btnShareAll').addEventListener('click',function(){ if(!state.sessions.length) return toast('No sessions yet'); shareWithPhotos(state.sessions,'daq-all-sessions-'+todayIso()+'.csv') });
   $('btnCopyAll').addEventListener('click',function(){ if(!state.sessions.length) return toast('No sessions yet'); copyText(toTsv(state.sessions)) });
-  $('btnBackup').addEventListener('click',function(){ var json=JSON.stringify({app:'daqprod',version:1,exported:fmtTs(Date.now())+' UTC',state:state});
-    shareFile(json,'daq-prod-backup-'+fmtTs(Date.now()).slice(0,16).replace(/[ :]/g,'-')+'.json','application/json') });
+  $('btnBackup').addEventListener('click',function(){ var photos={}, jobs=[];
+    state.sessions.forEach(function(s){ (s.photos||[]).forEach(function(p){ jobs.push(photoGet(p.id).then(function(b){ return b?blobToDataUrl(b):null }).then(function(u){ if(u) photos[p.id]=u })) }) });
+    Promise.all(jobs).then(function(){ var json=JSON.stringify({app:'daqprod',version:1,exported:fmtTs(Date.now())+' UTC',state:state,photos:photos});
+    shareFile(json,'daq-prod-backup-'+fmtTs(Date.now()).slice(0,16).replace(/[ :]/g,'-')+'.json','application/json') }).catch(function(){ toast('Backup failed: could not read photos') }) });
   $('btnRestore').addEventListener('click',function(){ $('fileRestore').click() });
   $('fileRestore').addEventListener('change',function(){ var f=this.files&&this.files[0]; this.value=''; if(!f) return;
     f.text().then(function(t){ var b=JSON.parse(t); if(!b||b.app!=='daqprod'||!b.state||!b.state.sessions) throw new Error('bad');
       var have={}; state.sessions.forEach(function(s){have[s.id]=1}); var added=0;
-      b.state.sessions.forEach(function(s){ if(!have[s.id]){ state.sessions.push(s); added++ } }); save(); renderSessions(); renderHeader();
-      toast(added?('Restored '+added+' session(s)'):'Nothing new in that backup') }).catch(function(){ toast('That file is not a DAQ Production backup') }) });
+      var jobs=[];
+      b.state.sessions.forEach(function(s){ if(!have[s.id]){ state.sessions.push(s); added++;
+        (s.photos||[]).forEach(function(p){ var bl=b.photos&&b.photos[p.id]&&dataUrlToBlob(b.photos[p.id]); if(bl) jobs.push(photoPut(p.id,bl).catch(function(){})) }) } });
+      save(); renderSessions(); renderHeader();
+      return Promise.all(jobs).then(function(){ toast(added?('Restored '+added+' session(s)'):'Nothing new in that backup') }) }).catch(function(){ toast('That file is not a DAQ Production backup') }) });
 
   // ---- nav ----
   $('btnSessions').addEventListener('click',function(){ if(!$('vSetup').hidden && cur()) formToSetup(); renderSessions(); show('vSessions') });
