@@ -90,9 +90,13 @@ textarea{min-height:80px;resize:vertical}
 .tag.open{border-color:var(--good);color:var(--good)}
 
 /* live */
-.clockbig{font-size:44px;font-weight:700;text-align:center;line-height:1.1}
-.clocklbl{font-size:12px;letter-spacing:.08em;text-transform:uppercase;text-align:center;color:var(--muted);margin-top:2px}
-.clocklbl.warn{color:var(--bad);font-weight:700}
+.weldbig{font-size:76px;font-weight:800;text-align:center;line-height:1}
+.weldbig.on{color:var(--bad)}
+.weldbig.off{color:var(--muted)}
+.weldlbl{font-size:13px;letter-spacing:.08em;text-transform:uppercase;text-align:center;color:var(--muted);margin-top:4px;font-weight:600}
+.weldlbl.on{color:var(--bad)}
+.recline{text-align:center;font-size:15px;margin-top:10px;color:var(--muted)}
+.recline.warn{color:var(--bad);font-weight:700}
 .passline{text-align:center;font-family:var(--mono);font-size:14px;margin-top:10px}
 .facewrap{display:flex;align-items:center;justify-content:center;gap:16px;margin:12px 0 8px}
 .facenum{font-size:64px;font-weight:700;line-height:1}
@@ -104,7 +108,6 @@ textarea{min-height:80px;resize:vertical}
 .faces div.now{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
 .complete{text-align:center;font-weight:700;color:var(--good);margin-top:8px}
 .big{display:block;width:100%;border:none;border-radius:12px;min-height:92px;font-size:30px;font-weight:800;letter-spacing:.04em;margin-top:12px}
-.big small{display:block;font-size:14px;font-weight:600;letter-spacing:0;opacity:.85;font-family:var(--mono)}
 .big.start{background:var(--good);color:var(--on)}
 .big.stop{background:var(--bad);color:var(--on)}
 .big.face{background:var(--accent);color:var(--accent-ink)}
@@ -220,8 +223,9 @@ textarea{min-height:80px;resize:vertical}
   <main id="vLive" hidden>
     <section>
       <div class="panel">
-        <div class="clockbig mono" id="bigClock">--:--:--.-</div>
-        <div class="clocklbl" id="clockLbl">Recorder time</div>
+        <div class="weldbig mono off" id="weldTime">0:00.0</div>
+        <div class="weldlbl" id="weldLbl">Ready</div>
+        <div class="recline" id="recLine"><span id="clockLbl">Recorder</span> <span class="mono" id="bigClock">--:--:--.-</span></div>
         <div class="passline" id="passLine"></div>
         <div class="facewrap">
           <div class="facemeta" style="text-align:right"><b>Face</b><span id="dirLbl"></span></div>
@@ -268,7 +272,7 @@ textarea{min-height:80px;resize:vertical}
 
 <script>
 (function(){
-  var LS_KEY='daqprod.v1', VER='v2026-10-20c', DAY=86400000;
+  var LS_KEY='daqprod.v1', VER='v2026-10-21a', DAY=86400000;
   function $(id){return document.getElementById(id)}
   function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
   // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
@@ -303,11 +307,11 @@ textarea{min-height:80px;resize:vertical}
 
   // Face, pass and welding state are replayed from the event list, so undo/delete anywhere stays consistent.
   function replay(s){
-    var st={passN:0,wfs:'',volts:'',face:null,welding:false,weldSince:null,done:{},presses:0,ended:false,rows:[]};
+    var st={passN:0,wfs:'',volts:'',face:null,welding:false,weldSince:null,lastRun:null,done:{},presses:0,ended:false,rows:[]};
     s.events.forEach(function(e){ var from='';
       if(e.type==='PASS'){ st.passN++; st.wfs=e.wfs; st.volts=e.volts; st.face=+e.startFace; st.done={}; st.presses=0 }
       else if(e.type==='START'){ st.welding=true; st.weldSince=e.t }
-      else if(e.type==='STOP'){ st.welding=false; st.weldSince=null }
+      else if(e.type==='STOP'){ if(st.weldSince!=null) st.lastRun=e.t-st.weldSince; st.welding=false; st.weldSince=null }
       else if(e.type==='FACE' && st.face!=null){ from=st.face; st.done[from]=1; st.presses++; st.face=nextFace(st.face,s.dir) }
       else if(e.type==='END'){ st.ended=true }
       st.rows.push({e:e,pass:st.passN||'',wfs:st.wfs,volts:st.volts,face:st.face==null?'':st.face,from:from,welding:st.welding});
@@ -437,13 +441,13 @@ textarea{min-height:80px;resize:vertical}
     for(var i=1;i<=12;i++){ strip.appendChild(el('div',(st.face===i?'now':(st.done[i]?'done':'')),String(i))) }
     $('passDone').hidden=st.presses<12;
     var ss=$('bStartStop'); ss.className='big '+(st.welding?'stop':'start'); ss.disabled=st.ended||!st.passN;
-    ss.innerHTML=''; ss.appendChild(document.createTextNode(st.welding?'STOP':'START')); var sm=el('small','',''); sm.id='weldTimer'; ss.appendChild(sm);
+    ss.textContent=st.welding?'STOP':'START';
     var nf=st.face==null?'':nextFace(st.face,s.dir);
     $('bFace').textContent=st.face==null?'FACE':('FACE  '+st.face+' → '+nf); $('bFace').disabled=st.ended||!st.passN;
     $('bModel').disabled=$('bEvent').disabled=$('bPass').disabled=st.ended;
     $('bEnd').textContent=st.ended?'Reopen':'End session'; $('bEnd').classList.toggle('danger',!st.ended);
     $('bUndo').disabled=!s.events.length;
-    live.weldSince=st.weldSince;
+    live.weldSince=st.weldSince; live.lastRun=st.lastRun;
     var log=$('log'); log.innerHTML='';
     if(!st.rows.length) log.appendChild(el('div','note','Nothing logged yet.'));
     st.rows.slice().reverse().forEach(function(r){ var b=el('button','lrow'); b.type='button';
@@ -452,7 +456,9 @@ textarea{min-height:80px;resize:vertical}
       if(r.e.note) b.appendChild(el('span','ln',r.e.note)); else if(r.e.type==='MODEL') b.appendChild(el('span','ln missing','Tap to add what the model showed')); else if(r.e.type==='NOTE') b.appendChild(el('span','ln missing','Tap to add a note'));
       b.addEventListener('click',function(){ editModal(r) }); log.appendChild(b) });
     renderHeader(); tick() }
-  var live={weldSince:null};
+  var live={weldSince:null,lastRun:null};
+  function fmtRun(ms){ var t=Math.max(0,Math.floor(ms/100)), d=t%10, sec=Math.floor(t/10), m=Math.floor(sec/60), h=Math.floor(m/60);
+    return (h?h+':'+pad(m%60,2):m)+':'+pad(sec%60,2)+'.'+d }
 
   $('bStartStop').addEventListener('click',function(){ if(!once('ss')) return; var t=tapTime(), st=replay(cur()); if(st.ended||!st.passN) return;
     flash(this); push({t:t,type:st.welding?'STOP':'START'}) });
@@ -583,9 +589,12 @@ textarea{min-height:80px;resize:vertical}
   // ---- clock tick ----
   function tick(){ var n=Date.now(), s=cur();
     $('hdrClock').textContent=fmtTod(n,0)+' UTC';
-    if(!$('vLive').hidden&&s){ if(s.offset!=null){ $('bigClock').textContent=recTod(s,n,1); $('clockLbl').textContent='Recorder time'; $('clockLbl').className='clocklbl' }
-      else { $('bigClock').textContent=fmtTod(n,1); $('clockLbl').textContent='UTC · recorder not synced'; $('clockLbl').className='clocklbl warn' }
-      var wt=$('weldTimer'); if(wt) wt.textContent=live.weldSince?('welding '+((n-live.weldSince)/1000).toFixed(0)+' s'):'' }
+    if(!$('vLive').hidden&&s){ var synced=s.offset!=null;
+      $('bigClock').textContent=synced?recTod(s,n,1):fmtTod(n,1); $('clockLbl').textContent=synced?'Recorder':'UTC · recorder not synced'; $('recLine').className='recline'+(synced?'':' warn');
+      // The weld run timer is the focal point: live while welding, last run's length while stopped.
+      var on=live.weldSince!=null;
+      $('weldTime').textContent=on?fmtRun(n-live.weldSince):fmtRun(live.lastRun||0); $('weldTime').className='weldbig mono'+(on?' on':' off');
+      $('weldLbl').textContent=on?'Welding':(live.lastRun!=null?'Stopped · last run':'Ready · tap START'); $('weldLbl').className='weldlbl'+(on?' on':'') }
     if(!$('vSetup').hidden&&s) $('syncState').textContent=syncText(s) }
   setInterval(tick,100);
 
