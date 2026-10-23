@@ -198,10 +198,16 @@ textarea{min-height:80px;resize:vertical}
           <input type="file" id="fTravPhoto" accept="image/*" capture="environment" hidden>
           <div class="note">Up to 4 photos. Make sure thickness and circumference are readable. Tap a photo to check it.</div>
         </div>
-        <div class="field"><label>Weld direction (how the FACE button counts)</label>
+        <div class="field"><label>Weld direction for pass 1 (each pass can change it)</label>
           <div class="seg" id="fDir"><button type="button" data-v="up">Up: 1 &rarr; 12</button><button type="button" data-v="down">Down: 12 &rarr; 1</button></div></div>
         <div class="field"><label>Start face (first pass)</label>
           <div class="stepper"><button type="button" data-step="fStart" data-d="-1" aria-label="Start face minus one">&minus;</button><input type="number" id="fStart" min="1" max="12" class="mono"><button type="button" data-step="fStart" data-d="1" aria-label="Start face plus one">+</button></div></div>
+      </div>
+
+      <div class="panel" id="passPanel" hidden>
+        <h2>Passes</h2>
+        <div id="passList"></div>
+        <div class="note">Fix a pass's WFS, volts, direction or start face. That pass's faces are recounted.</div>
       </div>
 
       <div class="panel">
@@ -272,7 +278,7 @@ textarea{min-height:80px;resize:vertical}
 
 <script>
 (function(){
-  var LS_KEY='daqprod.v1', VER='v2026-10-21d', DAY=86400000;
+  var LS_KEY='daqprod.v1', VER='v2026-10-23a', DAY=86400000;
   function $(id){return document.getElementById(id)}
   function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
   // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
@@ -307,20 +313,20 @@ textarea{min-height:80px;resize:vertical}
 
   // Face, pass and welding state are replayed from the event list, so undo/delete anywhere stays consistent.
   function replay(s){
-    var st={passN:0,wfs:'',volts:'',face:null,welding:false,weldSince:null,lastRun:null,done:{},presses:0,ended:false,rows:[]};
+    var st={passN:0,wfs:'',volts:'',dir:s.dir,face:null,welding:false,weldSince:null,lastRun:null,done:{},presses:0,ended:false,rows:[]};
     s.events.forEach(function(e){ var from='';
-      if(e.type==='PASS'){ st.passN++; st.wfs=e.wfs; st.volts=e.volts; st.face=+e.startFace; st.done={}; st.presses=0 }
+      if(e.type==='PASS'){ st.passN++; st.wfs=e.wfs; st.volts=e.volts; st.dir=e.dir||s.dir; st.face=+e.startFace; st.done={}; st.presses=0 }
       else if(e.type==='START'){ st.welding=true; st.weldSince=e.t }
       else if(e.type==='STOP'){ if(st.weldSince!=null) st.lastRun=e.t-st.weldSince; st.welding=false; st.weldSince=null }
-      else if(e.type==='FACE' && st.face!=null){ from=st.face; st.done[from]=1; st.presses++; st.face=nextFace(st.face,s.dir) }
+      else if(e.type==='FACE' && st.face!=null){ from=st.face; st.done[from]=1; st.presses++; st.face=nextFace(st.face,st.dir) }
       else if(e.type==='END'){ st.ended=true }
-      st.rows.push({e:e,pass:st.passN||'',wfs:st.wfs,volts:st.volts,face:st.face==null?'':st.face,from:from,welding:st.welding});
+      st.rows.push({e:e,pass:st.passN||'',wfs:st.wfs,volts:st.volts,dir:st.dir,face:st.face==null?'':st.face,from:from,welding:st.welding});
     });
     return st }
 
   var LABEL={PASS:'PASS_BEGIN',START:'START',STOP:'STOP',FACE:'FACE',MODEL:'MODEL_FLAG',NOTE:'EVENT',END:'SESSION_END'};
   function describe(r){ var e=r.e;
-    if(e.type==='PASS') return 'Pass '+r.pass+' begins on face '+e.startFace+' · '+e.wfs+' WFS · '+e.volts+' V';
+    if(e.type==='PASS') return 'Pass '+r.pass+' begins on face '+e.startFace+' · '+r.dir+' · '+e.wfs+' WFS · '+e.volts+' V';
     if(e.type==='FACE') return 'Face '+r.from+' → '+r.face;
     if(e.type==='START') return 'START on face '+r.face;
     if(e.type==='STOP') return 'STOP on face '+r.face;
@@ -363,8 +369,15 @@ textarea{min-height:80px;resize:vertical}
   function setupToForm(){ var s=cur();
     $('fNum').value=s.num; $('fUnit').value=s.unit; $('fWelder').value=s.welder; $('fBay').value=s.bay;
     segSet('fSide',s.side); segSet('fDims',s.dims||'values'); $('fThick').value=s.thick; $('fCirc').value=s.circ; segSet('fDir',s.dir); $('fStart').value=s.startFace;
-    $('fClock').value=s.clockReading; $('fNotes').value=s.notes; dimsView(); renderThumbs();
+    $('fClock').value=s.clockReading; $('fNotes').value=s.notes; dimsView(); renderThumbs(); renderPasses();
     $('btnBegin').textContent=s.events.length?'Save and return to session':'Begin session' }
+  function renderPasses(){ var s=cur(), box=$('passList'); box.innerHTML='';
+    var rows=replay(s).rows.filter(function(r){ return r.e.type==='PASS' }); $('passPanel').hidden=!rows.length;
+    rows.forEach(function(r){ var row=el('div','srow'), info=el('div','info');
+      info.appendChild(el('div','t','Pass '+r.pass)); info.appendChild(el('div','s','face '+r.e.startFace+' · '+r.dir+' · '+r.e.wfs+' WFS · '+r.e.volts+' V'));
+      var b=el('button','btn','Edit'); b.type='button';
+      b.addEventListener('click',function(){ passModal(r.e.startFace,r.e.wfs,r.e.volts,r.dir,r.e,null) });
+      row.appendChild(info); row.appendChild(b); box.appendChild(row) }) }
   function formToSetup(){ var s=cur();
     s.num=$('fNum').value.trim(); s.unit=$('fUnit').value.trim(); s.welder=$('fWelder').value.trim(); s.bay=$('fBay').value.trim();
     s.side=segGet('fSide'); s.dims=segGet('fDims')||'values'; s.thick=$('fThick').value.trim(); s.circ=$('fCirc').value.trim(); s.dir=segGet('fDir')||'up';
@@ -424,7 +437,7 @@ textarea{min-height:80px;resize:vertical}
     if(miss.length){ toast('Fill in the outlined fields'); return }
     if(s.offset==null && !confirm('Recorder clock is not synced. Log times will be phone UTC only. Begin anyway?')) return;
     if(s.events.length){ renderLive(); show('vLive'); return }
-    passModal(s.startFace,'','',function(){ renderLive(); show('vLive') }) });
+    passModal(s.startFace,'','',s.dir,null,function(){ renderLive(); show('vLive') }) });
 
   // ---- live ----
   function push(e){ var s=cur(); e.id=uid(); s.events.push(e); s.events.sort(function(a,b){return a.t-b.t}); save(); renderLive() }
@@ -434,7 +447,7 @@ textarea{min-height:80px;resize:vertical}
 
   function renderLive(){ var s=cur(); if(!s) return; var st=replay(s);
     $('passLine').textContent=st.passN?('Pass '+st.passN+' · '+st.wfs+' WFS · '+st.volts+' V'):'No pass yet';
-    $('dirLbl').textContent=s.dir==='down'?'counting down':'counting up';
+    $('dirLbl').textContent=st.dir==='down'?'counting down':'counting up';
     $('faceNum').textContent=st.face==null?'-':st.face;
     $('pressCount').textContent=st.presses+' / 12';
     var strip=$('faceStrip'); strip.innerHTML='';
@@ -442,7 +455,7 @@ textarea{min-height:80px;resize:vertical}
     $('passDone').hidden=st.presses<12;
     var ss=$('bStartStop'); ss.className='big '+(st.welding?'stop':'start'); ss.disabled=st.ended||!st.passN;
     ss.textContent=st.welding?'STOP':'START';
-    var nf=st.face==null?'':nextFace(st.face,s.dir);
+    var nf=st.face==null?'':nextFace(st.face,st.dir);
     $('bFace').textContent=st.face==null?'FACE':('FACE  '+st.face+' → '+nf); $('bFace').disabled=st.ended||!st.passN;
     $('bModel').disabled=$('bEvent').disabled=$('bPass').disabled=st.ended;
     $('bEnd').textContent=st.ended?'Reopen':'End session'; $('bEnd').classList.toggle('danger',!st.ended);
@@ -466,7 +479,7 @@ textarea{min-height:80px;resize:vertical}
     flash(this); push({t:t,type:'FACE'}) });
   $('bModel').addEventListener('click',function(){ if(!once('model')) return; var t=tapTime(); flash(this); push({t:t,type:'MODEL',note:''}); toast('Model flag logged. Tap it in the log to add detail.') });
   $('bEvent').addEventListener('click',function(){ var t=tapTime(); noteModal(t) });
-  $('bPass').addEventListener('click',function(){ var s=cur(), st=replay(s); passModal(st.face==null?s.startFace:st.face,st.wfs,st.volts,null) });
+  $('bPass').addEventListener('click',function(){ var s=cur(), st=replay(s); passModal(st.face==null?s.startFace:st.face,st.wfs,st.volts,st.dir,null,null) });
   $('bUndo').addEventListener('click',function(){ var s=cur(); if(!s.events.length) return; var st=replay(s), r=st.rows[st.rows.length-1];
     if(!confirm('Undo: '+describe(r)+' at '+(recTod(s,r.e.t,1)||fmtTod(r.e.t,1)+' UTC')+'?')) return; s.events.pop(); save(); renderLive(); toast('Removed') });
   $('bEnd').addEventListener('click',function(){ var s=cur(), st=replay(s), t=Date.now();
@@ -499,7 +512,8 @@ textarea{min-height:80px;resize:vertical}
       push({t:t,type:'NOTE',tag:tagGet(seg),note:note}); toast(note?'Event logged':'Event logged. Tap it in the log to add a note.') });
     setTimeout(function(){ta.focus()},50) }
 
-  function passModal(face,wfs,volts,after){ var s=cur(), st=replay(s), body=el('div');
+  // New pass, or edit an existing PASS event (editE). Saving an edit recounts that pass's faces via replay.
+  function passModal(face,wfs,volts,dir,editE,after){ var s=cur(), st=replay(s), body=el('div');
     var g=el('div','grid2'); var iw=document.createElement('input'); iw.type='text'; iw.inputMode='decimal'; iw.value=wfs||'';
     var iv=document.createElement('input'); iv.type='text'; iv.inputMode='decimal'; iv.value=volts||'';
     var fw=fieldEl('WFS',iw), fv=fieldEl('Voltage',iv); g.appendChild(fw); g.appendChild(fv); body.appendChild(g);
@@ -508,12 +522,19 @@ textarea{min-height:80px;resize:vertical}
     mi.addEventListener('click',function(){ var v=(parseInt(fi.value,10)||1)-1; fi.value=v<1?12:v });
     pl.addEventListener('click',function(){ var v=(parseInt(fi.value,10)||1)+1; fi.value=v>12?1:v });
     stp.appendChild(mi); stp.appendChild(fi); stp.appendChild(pl); body.appendChild(fieldEl('Starts on face',stp));
-    if(st.welding) body.appendChild(el('div','note','Welding is still running. It will keep running into the new pass unless you tap STOP.'));
-    openModal('Pass '+(st.passN+1),'One weld all the way around all 12 faces',body,'Begin pass '+(st.passN+1),function(){
+    var ds=el('div','seg'); ds.id='mDir'; [['up','Up: 1 → 12'],['down','Down: 12 → 1']].forEach(function(x){ var b=el('button','',x[1]); b.type='button'; b.dataset.v=x[0]; b.setAttribute('aria-pressed',x[0]===(dir||'up')?'true':'false'); ds.appendChild(b) });
+    ds.addEventListener('click',function(ev){ var b=ev.target.closest('button'); if(b) ds.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-pressed',x===b?'true':'false') }) });
+    body.appendChild(fieldEl('Direction',ds));
+    var n=editE?(s.events.filter(function(e){return e.type==='PASS'}).indexOf(editE)+1):st.passN+1;
+    if(!editE&&st.welding) body.appendChild(el('div','note','Welding is still running. It will keep running into the new pass unless you tap STOP.'));
+    openModal((editE?'Edit pass ':'Pass ')+n,editE?'Faces in this pass are recounted when you save':'One weld all the way around all 12 faces',body,editE?'Save pass '+n:'Begin pass '+n,function(){
       var ok=true; [[fw,iw],[fv,iv]].forEach(function(p){ if(!p[1].value.trim()){ p[0].classList.add('need'); ok=false } else p[0].classList.remove('need') });
       var f=parseInt(fi.value,10); if(!(f>=1&&f<=12)){ toast('Face must be 1 to 12'); return false }
       if(!ok) return false;
-      push({t:Date.now(),type:'PASS',wfs:iw.value.trim(),volts:iv.value.trim(),startFace:f}); if(after) after() });
+      var d=ds.querySelector('button[aria-pressed="true"]').dataset.v;
+      if(editE){ editE.wfs=iw.value.trim(); editE.volts=iv.value.trim(); editE.startFace=f; editE.dir=d; save(); renderLive(); renderPasses(); toast('Pass '+n+' updated') }
+      else push({t:Date.now(),type:'PASS',wfs:iw.value.trim(),volts:iv.value.trim(),startFace:f,dir:d});
+      if(after) after() });
     setTimeout(function(){ if(!iw.value) iw.focus() },50) }
 
   function editModal(r){ var s=cur(), body=el('div'), ta=noteArea(r.e.note);
@@ -535,7 +556,7 @@ textarea{min-height:80px;resize:vertical}
     'event_no','event','pass','wfs','volts','face','from_face','welding_after','recorder_time','phone_time_utc','elapsed_s','event_type','note'];
   function rows(list){ var out=[]; list.forEach(function(s){ var st=replay(s), t0=s.events.length?s.events[0].t:0, trav=s.dims==='traveler';
     var phn=(s.photos||[]).map(function(p,i){ return photoName(s,i) }).join('; ');
-    st.rows.forEach(function(r,i){ out.push([s.date,s.num,s.unit,s.welder,s.bay,s.side,trav?'see traveler':s.thick,trav?'see traveler':s.circ,phn,s.dir,s.startFace,
+    st.rows.forEach(function(r,i){ out.push([s.date,s.num,s.unit,s.welder,s.bay,s.side,trav?'see traveler':s.thick,trav?'see traveler':s.circ,phn,r.dir,s.startFace,
       s.clockReading,s.clockPhone?fmtTs(s.clockPhone):'',s.offset==null?'':(s.offset/1000).toFixed(3),s.notes,
       i+1,LABEL[r.e.type]||r.e.type,r.pass,r.wfs,r.volts,r.face,r.from,r.welding?'yes':'no',recTod(s,r.e.t,3),fmtTs(r.e.t),((r.e.t-t0)/1000).toFixed(3),r.e.tag||'',r.e.note||'']) }) });
     return out }

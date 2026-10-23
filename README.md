@@ -21,6 +21,6 @@ address. The old data stays under the old URL and is not migrated automatically.
 Live session logger for production welds. One session = one recording-unit on/off. Setup once
 (welder, bay, side, thickness + circumference typed or "see traveler" with up to 4 photos, direction,
 session #, unit #), sync to the recorder
-clock, then per pass: WFS/volts, START/STOP, FACE (counts in the setup direction, 12 presses = one pass,
+clock, then per pass: WFS/volts/direction/start face (all editable later under Edit setup > Passes), START/STOP, FACE (counts in the setup direction, 12 presses = one pass,
 one weld around all 12 faces), MODEL FLAG (timestamp + face, detail added later), EVENT (note optional, can be added later from the log). Exports one CSV
 row per event with recorder time and UTC. Uses its own storage key, so it does not touch `index.html` data.
