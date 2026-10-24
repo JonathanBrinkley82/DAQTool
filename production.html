@@ -262,6 +262,10 @@ textarea{min-height:80px;resize:vertical}
     <section>
       <h2>Inspection</h2>
       <div class="panel">
+        <div class="field" style="margin-bottom:6px"><label>Defects</label></div>
+        <div id="defList"></div>
+        <button class="btn" type="button" id="btnDefect" style="width:100%;margin-bottom:14px">+ Add defect</button>
+        <div class="field" style="margin-bottom:6px"><label>Photos</label></div>
         <div class="thumbs" id="inspThumbs"></div>
         <button class="btn primary" type="button" id="btnInspPhoto" style="width:100%">+ Take inspection photo</button>
         <input type="file" id="fInspPhoto" accept="image/*" capture="environment" hidden>
@@ -292,7 +296,7 @@ textarea{min-height:80px;resize:vertical}
 
 <script>
 (function(){
-  var LS_KEY='daqprod.v1', VER='v2026-10-24a', DAY=86400000;
+  var LS_KEY='daqprod.v1', VER='v2026-10-24b', DAY=86400000;
   function $(id){return document.getElementById(id)}
   function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
   // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
@@ -361,7 +365,7 @@ textarea{min-height:80px;resize:vertical}
     state.sessions.slice().reverse().forEach(function(s){ var st=replay(s);
       var row=el('div','srow'), info=el('div','info');
       info.appendChild(el('div','t','Session '+(s.num||'?')+' · Unit '+(s.unit||'?')+' · Bay '+(s.bay||'?')+' · '+(s.side||'?')));
-      info.appendChild(el('div','s',s.date+' · '+(s.welder||'no welder')+' · '+st.passN+' pass · '+s.events.length+' events'+((s.insp||[]).length?' · '+s.insp.length+' insp photos':'')));
+      info.appendChild(el('div','s',s.date+' · '+(s.welder||'no welder')+' · '+st.passN+' pass · '+s.events.length+' events'+((s.insp||[]).length?' · '+s.insp.length+' insp photos':'')+((s.defects||[]).length?' · '+s.defects.length+' defects':'')));
       var tag=el('span','tag'+(st.ended?'':' open'),st.ended?'Ended':'Open');
       var open=el('button','btn','Open'); open.type='button';
       open.addEventListener('click',function(){ state.active=s.id; save(); openSession() });
@@ -487,7 +491,7 @@ textarea{min-height:80px;resize:vertical}
       b.appendChild(el('span','le',describe(r)));
       if(r.e.note) b.appendChild(el('span','ln',r.e.note)); else if(r.e.type==='MODEL') b.appendChild(el('span','ln missing','Tap to add what the model showed')); else if(r.e.type==='NOTE') b.appendChild(el('span','ln missing','Tap to add a note'));
       b.addEventListener('click',function(){ editModal(r) }); log.appendChild(b) });
-    renderInsp(); renderHeader(); tick() }
+    renderInsp(); renderDefects(); renderHeader(); tick() }
   var live={weldSince:null,lastRun:null};
   function fmtRun(ms){ var t=Math.max(0,Math.floor(ms/100)), d=t%10, sec=Math.floor(t/10), m=Math.floor(sec/60), h=Math.floor(m/60);
     return (h?h+':'+pad(m%60,2):m)+':'+pad(sec%60,2)+'.'+d }
@@ -569,6 +573,42 @@ textarea{min-height:80px;resize:vertical}
       var v=ta.value.trim();
       r.e.note=v; if(seg) r.e.tag=tagGet(seg); save(); renderLive() }) }
 
+  // ---- inspection defects: face + depth + length (inches), optional note ----
+  // Accepts 0.375, .375, 3/8 or 1 1/2; returns a number rounded to 4 places, or null.
+  function parseInches(v){ v=String(v||'').trim(); var m;
+    if((m=v.match(/^(\d+)\s+(\d+)\/(\d+)$/))&&+m[3]) return Math.round((+m[1]+m[2]/m[3])*10000)/10000;
+    if((m=v.match(/^(\d+)\/(\d+)$/))&&+m[2]) return Math.round(m[1]/m[2]*10000)/10000;
+    if(/^(\d+\.?\d*|\.\d+)$/.test(v)) return Math.round(parseFloat(v)*10000)/10000;
+    return null }
+  function defectText(d){ return 'Face '+d.face+' · depth '+d.depth+' in · length '+d.length+' in' }
+  function defectCsv(d){ return 'F'+d.face+' D'+d.depth+' L'+d.length+(d.note?' ('+d.note+')':'') }
+  function renderDefects(){ var s=cur(); if(!s) return; var box=$('defList'); box.innerHTML=''; var list=s.defects||[];
+    if(!list.length) box.appendChild(el('div','note','No defects recorded.'));
+    list.forEach(function(d,i){ var b=el('button','lrow'); b.type='button';
+      b.appendChild(el('span','lt','#'+(i+1))); b.appendChild(el('span','le',defectText(d)));
+      if(d.note) b.appendChild(el('span','ln',d.note));
+      b.addEventListener('click',function(){ defectModal(i) }); box.appendChild(b) }) }
+  function defectModal(i){ var s=cur(), d=i==null?null:s.defects[i], body=el('div');
+    var pick=facePick(d?d.face:'',takenFaces(s,-1)); body.appendChild(fieldEl('Face',pick));
+    body.appendChild(el('div','note','Outlined faces have inspection photos.'));
+    var g=el('div','grid2'), iD=document.createElement('input'), iL=document.createElement('input'), iN=document.createElement('input');
+    iD.type=iL.type=iN.type='text'; iD.inputMode=iL.inputMode='decimal'; iD.placeholder='e.g. 0.375 or 3/8'; iL.placeholder='e.g. 1 or 1 1/2';
+    iD.value=d?d.depth:''; iL.value=d?d.length:''; iN.value=d?(d.note||''):''; iN.placeholder='e.g. depth range 1/4-3/8';
+    var fD=fieldEl('Depth (in)',iD), fL=fieldEl('Length (in)',iL); g.appendChild(fD); g.appendChild(fL); body.appendChild(g);
+    body.appendChild(fieldEl('Note (optional)',iN));
+    if(d){ var del=el('button','btn danger','Delete this defect'); del.type='button'; del.style.width='100%';
+      del.addEventListener('click',function(){ if(!confirm('Delete defect #'+(i+1)+' ('+defectText(d)+')?')) return;
+        s.defects.splice(i,1); save(); closeModal(); renderDefects(); renderSessions(); toast('Defect deleted') }); body.appendChild(del) }
+    openModal(d?'Defect #'+(i+1):'Add defect','Face, depth and length from the inspection',body,d?'Save':'Add defect',function(){
+      var fv=parseInt(pick.dataset.v,10), dv=parseInches(iD.value), lv=parseInches(iL.value), ok=true;
+      pick.parentNode.classList.toggle('need',!(fv>=1&&fv<=12)); fD.classList.toggle('need',dv==null); fL.classList.toggle('need',lv==null);
+      if(!(fv>=1&&fv<=12)||dv==null||lv==null){ toast('Face, depth and length are required (inches, e.g. 0.375 or 3/8)'); return false }
+      var rec={id:d?d.id:uid(),face:fv,depth:dv,length:lv,note:iN.value.trim(),t:d?d.t:Date.now()};
+      if(d) s.defects[i]=rec; else s.defects=(s.defects||[]).concat([rec]);
+      save(); renderDefects(); renderSessions(); toast(d?'Defect saved':'Defect added · face '+fv) });
+    if(!d) setTimeout(function(){ iD.focus() },50) }
+  $('btnDefect').addEventListener('click',function(){ defectModal(null) });
+
   // ---- inspection photos ----
   var MAXINSP=24;
   function takenFaces(s,skip){ var t={}; (s.insp||[]).forEach(function(p,i){ if(i!==skip) t[p.face]=1 }); return t }
@@ -610,13 +650,14 @@ textarea{min-height:80px;resize:vertical}
         p.face=fv; save(); renderInsp(); toast('Saved · face '+fv) }) }) }
 
   // ---- export ----
-  var COLS=['session_date','session','unit','welder','bay','pole_side','material_thickness','pole_circumference','traveler_photos','inspection_photos','weld_direction','first_start_face',
+  var COLS=['session_date','session','unit','welder','bay','pole_side','material_thickness','pole_circumference','traveler_photos','inspection_photos','defects','weld_direction','first_start_face',
     'recorder_clock_reading','phone_time_at_sync_utc','recorder_offset_s','setup_notes',
     'event_no','event','pass','wfs','volts','face','from_face','welding_after','recorder_time','phone_time_utc','elapsed_s','event_type','note'];
   function rows(list){ var out=[]; list.forEach(function(s){ var st=replay(s), t0=s.events.length?s.events[0].t:0, trav=s.dims==='traveler';
     var phn=(s.photos||[]).map(function(p,i){ return photoName(s,i) }).join('; ');
     var insn=(s.insp||[]).map(function(p,i){ return inspName(s,i) }).join('; ');
-    st.rows.forEach(function(r,i){ out.push([s.date,s.num,s.unit,s.welder,s.bay,s.side,trav?'see traveler':s.thick,trav?'see traveler':s.circ,phn,insn,r.dir,s.startFace,
+    var defs=(s.defects||[]).map(defectCsv).join('; ');
+    st.rows.forEach(function(r,i){ out.push([s.date,s.num,s.unit,s.welder,s.bay,s.side,trav?'see traveler':s.thick,trav?'see traveler':s.circ,phn,insn,defs,r.dir,s.startFace,
       s.clockReading,s.clockPhone?fmtTs(s.clockPhone):'',s.offset==null?'':(s.offset/1000).toFixed(3),s.notes,
       i+1,LABEL[r.e.type]||r.e.type,r.pass,r.wfs,r.volts,r.face,r.from,r.welding?'yes':'no',recTod(s,r.e.t,3),fmtTs(r.e.t),((r.e.t-t0)/1000).toFixed(3),r.e.tag||'',r.e.note||'']) }) });
     return out }
