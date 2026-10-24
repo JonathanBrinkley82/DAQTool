@@ -78,6 +78,11 @@ textarea{min-height:80px;resize:vertical}
 .thumb img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
 .thumb button{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:6px;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:14px}
 .fullimg{width:100%;border-radius:8px;display:block}
+.thumb .flabel{position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,.65);color:#fff;font:600 12px var(--mono);padding:2px 5px;border-radius:4px}
+.facepick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.facepick button{min-height:52px;font-size:20px;font-weight:700;border-radius:8px;border:1px solid var(--line);background:var(--surface2);font-family:var(--mono)}
+.facepick button.has{border:2px solid var(--accent)}
+.facepick button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .need{outline:2px solid var(--bad);outline-offset:2px;border-radius:10px}
 
 /* sessions list */
@@ -255,6 +260,15 @@ textarea{min-height:80px;resize:vertical}
       </div>
     </section>
     <section>
+      <h2>Inspection</h2>
+      <div class="panel">
+        <div class="thumbs" id="inspThumbs"></div>
+        <button class="btn primary" type="button" id="btnInspPhoto" style="width:100%">+ Take inspection photo</button>
+        <input type="file" id="fInspPhoto" accept="image/*" capture="environment" hidden>
+        <div class="note">Up to 24 photos. Tag each one with the face it shows. Add them any time, even after End session. Tap a photo to check it, change its face or delete it.</div>
+      </div>
+    </section>
+    <section>
       <h2>Log (tap a line to add a note or delete it)</h2>
       <div class="panel" id="log"></div>
       <div class="btnrow" style="margin-top:12px">
@@ -278,7 +292,7 @@ textarea{min-height:80px;resize:vertical}
 
 <script>
 (function(){
-  var LS_KEY='daqprod.v1', VER='v2026-10-23a', DAY=86400000;
+  var LS_KEY='daqprod.v1', VER='v2026-10-24a', DAY=86400000;
   function $(id){return document.getElementById(id)}
   function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
   // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
@@ -347,13 +361,13 @@ textarea{min-height:80px;resize:vertical}
     state.sessions.slice().reverse().forEach(function(s){ var st=replay(s);
       var row=el('div','srow'), info=el('div','info');
       info.appendChild(el('div','t','Session '+(s.num||'?')+' · Unit '+(s.unit||'?')+' · Bay '+(s.bay||'?')+' · '+(s.side||'?')));
-      info.appendChild(el('div','s',s.date+' · '+(s.welder||'no welder')+' · '+st.passN+' pass · '+s.events.length+' events'));
+      info.appendChild(el('div','s',s.date+' · '+(s.welder||'no welder')+' · '+st.passN+' pass · '+s.events.length+' events'+((s.insp||[]).length?' · '+s.insp.length+' insp photos':'')));
       var tag=el('span','tag'+(st.ended?'':' open'),st.ended?'Ended':'Open');
       var open=el('button','btn','Open'); open.type='button';
       open.addEventListener('click',function(){ state.active=s.id; save(); openSession() });
       var del=el('button','btn danger','Delete'); del.type='button';
       del.addEventListener('click',function(){ if(!confirm('Delete session '+(s.num||'?')+' and its '+s.events.length+' events? This cannot be undone.')) return;
-        (s.photos||[]).forEach(function(p){ photoDel(p.id) });
+        sessionFiles(s).forEach(function(p){ photoDel(p.id) });
         state.sessions=state.sessions.filter(function(x){return x.id!==s.id}); if(state.active===s.id) state.active=null; save(); renderSessions(); renderHeader() });
       row.appendChild(info); row.appendChild(tag); row.appendChild(open); row.appendChild(del); box.appendChild(row) }) }
 
@@ -398,6 +412,11 @@ textarea{min-height:80px;resize:vertical}
       c.toBlob(function(b){ URL.revokeObjectURL(url); if(!b) rej(new Error('encode')); else res({blob:b,thumb:thumb}) },'image/jpeg',0.85) }catch(e){ URL.revokeObjectURL(url); rej(e) } };
     img.onerror=function(){ URL.revokeObjectURL(url); rej(new Error('load')) }; img.src=url }) }
   function photoName(s,i){ return 'daq-session-'+(s.num||'x')+'-unit-'+(s.unit||'x')+'-'+s.date+'-traveler-'+(i+1)+'.jpg' }
+  // Inspection photos are named by face; a second photo of the same face gets -2, -3...
+  function inspName(s,i){ var list=s.insp||[], f=list[i].face, k=0; for(var j=0;j<=i;j++){ if(list[j].face===f) k++ }
+    return 'daq-session-'+(s.num||'x')+'-unit-'+(s.unit||'x')+'-'+s.date+'-inspection-face-'+pad(f,2)+(k>1?'-'+k:'')+'.jpg' }
+  function sessionFiles(s){ return (s.photos||[]).map(function(p,i){ return {id:p.id,name:photoName(s,i)} })
+    .concat((s.insp||[]).map(function(p,i){ return {id:p.id,name:inspName(s,i)} })) }
   function dimsView(){ var t=segGet('fDims')==='traveler'; $('dimsValues').hidden=t; $('dimsTraveler').hidden=!t }
   $('fDims').addEventListener('click',dimsView);
   function renderThumbs(){ var s=cur(), box=$('thumbs'); box.innerHTML=''; var ph=s.photos||[];
@@ -468,7 +487,7 @@ textarea{min-height:80px;resize:vertical}
       b.appendChild(el('span','le',describe(r)));
       if(r.e.note) b.appendChild(el('span','ln',r.e.note)); else if(r.e.type==='MODEL') b.appendChild(el('span','ln missing','Tap to add what the model showed')); else if(r.e.type==='NOTE') b.appendChild(el('span','ln missing','Tap to add a note'));
       b.addEventListener('click',function(){ editModal(r) }); log.appendChild(b) });
-    renderHeader(); tick() }
+    renderInsp(); renderHeader(); tick() }
   var live={weldSince:null,lastRun:null};
   function fmtRun(ms){ var t=Math.max(0,Math.floor(ms/100)), d=t%10, sec=Math.floor(t/10), m=Math.floor(sec/60), h=Math.floor(m/60);
     return (h?h+':'+pad(m%60,2):m)+':'+pad(sec%60,2)+'.'+d }
@@ -489,11 +508,11 @@ textarea{min-height:80px;resize:vertical}
   $('bSetup').addEventListener('click',function(){ setupToForm(); show('vSetup') });
 
   // ---- modals ----
-  var onOk=null;
-  function openModal(title,when,body,okLabel,fn){ $('mTitle').textContent=title; $('mWhen').textContent=when; var mb=$('mBody'); mb.innerHTML=''; mb.appendChild(body);
+  var onOk=null, onCancel=null;
+  function openModal(title,when,body,okLabel,fn,cancelFn){ onCancel=cancelFn||null; $('mTitle').textContent=title; $('mWhen').textContent=when; var mb=$('mBody'); mb.innerHTML=''; mb.appendChild(body);
     $('mOk').textContent=okLabel||'Save'; onOk=fn; $('modal').hidden=false }
-  function closeModal(){ $('modal').hidden=true; onOk=null }
-  $('mCancel').addEventListener('click',closeModal);
+  function closeModal(){ $('modal').hidden=true; onOk=null; onCancel=null }
+  $('mCancel').addEventListener('click',function(){ var c=onCancel; closeModal(); if(c) c() });
   $('mOk').addEventListener('click',function(){ if(onOk&&onOk()===false) return; closeModal() });
   function whenText(t){ var s=cur(); return (s.offset!=null?'Recorder '+recTod(s,t,1)+' · ':'')+fmtTod(t,1)+' UTC' }
   function fieldEl(label,input){ var f=el('div','field'); var l=el('label','',label); f.appendChild(l); f.appendChild(input); return f }
@@ -550,13 +569,54 @@ textarea{min-height:80px;resize:vertical}
       var v=ta.value.trim();
       r.e.note=v; if(seg) r.e.tag=tagGet(seg); save(); renderLive() }) }
 
+  // ---- inspection photos ----
+  var MAXINSP=24;
+  function takenFaces(s,skip){ var t={}; (s.insp||[]).forEach(function(p,i){ if(i!==skip) t[p.face]=1 }); return t }
+  // 12 face buttons; faces that already have a photo are outlined.
+  function facePick(sel,taken){ var g=el('div','facepick'); g.dataset.v=sel||'';
+    for(var f=1;f<=12;f++){ var b=el('button',taken[f]?'has':'',String(f)); b.type='button'; b.dataset.v=f; b.setAttribute('aria-pressed',String(f)===String(sel)?'true':'false'); g.appendChild(b) }
+    g.addEventListener('click',function(ev){ var b=ev.target.closest('button'); if(!b) return; g.dataset.v=b.dataset.v; g.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-pressed',x===b?'true':'false') }) });
+    return g }
+  function renderInsp(){ var s=cur(); if(!s) return; var box=$('inspThumbs'); box.innerHTML=''; var list=s.insp||[];
+    list.forEach(function(p,i){ var d=el('div','thumb'), im=document.createElement('img'); im.src=p.thumb; im.alt='Inspection photo, face '+p.face;
+      d.appendChild(im); d.appendChild(el('span','flabel','F'+p.face)); d.addEventListener('click',function(){ inspModal(i) }); box.appendChild(d) });
+    $('btnInspPhoto').disabled=list.length>=MAXINSP;
+    $('btnInspPhoto').textContent=list.length>=MAXINSP?'24 of 24 photos taken':'+ Take inspection photo ('+list.length+' of 24)' }
+  $('btnInspPhoto').addEventListener('click',function(){ $('fInspPhoto').click() });
+  $('fInspPhoto').addEventListener('change',function(){ var f=this.files&&this.files[0]; this.value=''; var s=cur(); if(!f||!s) return;
+    if((s.insp||[]).length>=MAXINSP) return toast('24 photos max');
+    toast('Saving photo...');
+    processFile(f).then(function(p){ var id=uid(); return photoPut(id,p.blob).then(function(){
+      $('toast').classList.remove('show');  // the "Saving photo..." toast would cover the Save button
+      var taken=takenFaces(s,-1), def=1; for(var k=1;k<=12;k++){ if(!taken[k]){ def=k; break } }
+      var body=el('div'), im=document.createElement('img'); im.className='fullimg'; im.src=p.thumb; im.style.maxHeight='200px'; im.style.width='auto'; im.style.margin='0 auto 12px';
+      var pick=facePick(def,taken); body.appendChild(im); body.appendChild(fieldEl('Which face is this?',pick));
+      body.appendChild(el('div','note','Outlined faces already have a photo.'));
+      openModal('Inspection photo','Tag the face it shows',body,'Save photo',function(){ var fv=parseInt(pick.dataset.v,10);
+        if(!(fv>=1&&fv<=12)){ toast('Pick a face'); return false }
+        s.insp=(s.insp||[]).concat([{id:id,thumb:p.thumb,face:fv,t:Date.now()}]); save(); renderInsp(); renderSessions(); toast('Inspection photo saved · face '+fv) },
+        function(){ photoDel(id); toast('Photo discarded') }) }) })
+    .catch(function(e){ toast('Photo failed: '+((e&&(e.name||e.message))||'unknown')) }) });
+  function inspModal(i){ var s=cur(), p=s.insp[i];
+    photoGet(p.id).then(function(b){ var body=el('div');
+      if(b){ var im=document.createElement('img'); im.className='fullimg'; im.src=URL.createObjectURL(b); im.style.marginBottom='12px'; body.appendChild(im) } else body.appendChild(el('div','note','Photo file missing on this phone.'));
+      var pick=facePick(p.face,takenFaces(s,i)); body.appendChild(fieldEl('Face',pick));
+      var del=el('button','btn danger','Delete this photo'); del.type='button'; del.style.width='100%'; del.style.marginTop='12px';
+      del.addEventListener('click',function(){ if(!confirm('Delete inspection photo (face '+p.face+')?')) return;
+        s.insp=s.insp.filter(function(q){ return q.id!==p.id }); save(); photoDel(p.id); closeModal(); renderInsp(); renderSessions(); toast('Deleted') });
+      body.appendChild(del);
+      openModal('Inspection photo · face '+p.face,inspName(s,i),body,'Save',function(){ var fv=parseInt(pick.dataset.v,10);
+        if(!(fv>=1&&fv<=12)){ toast('Pick a face'); return false }
+        p.face=fv; save(); renderInsp(); toast('Saved · face '+fv) }) }) }
+
   // ---- export ----
-  var COLS=['session_date','session','unit','welder','bay','pole_side','material_thickness','pole_circumference','traveler_photos','weld_direction','first_start_face',
+  var COLS=['session_date','session','unit','welder','bay','pole_side','material_thickness','pole_circumference','traveler_photos','inspection_photos','weld_direction','first_start_face',
     'recorder_clock_reading','phone_time_at_sync_utc','recorder_offset_s','setup_notes',
     'event_no','event','pass','wfs','volts','face','from_face','welding_after','recorder_time','phone_time_utc','elapsed_s','event_type','note'];
   function rows(list){ var out=[]; list.forEach(function(s){ var st=replay(s), t0=s.events.length?s.events[0].t:0, trav=s.dims==='traveler';
     var phn=(s.photos||[]).map(function(p,i){ return photoName(s,i) }).join('; ');
-    st.rows.forEach(function(r,i){ out.push([s.date,s.num,s.unit,s.welder,s.bay,s.side,trav?'see traveler':s.thick,trav?'see traveler':s.circ,phn,r.dir,s.startFace,
+    var insn=(s.insp||[]).map(function(p,i){ return inspName(s,i) }).join('; ');
+    st.rows.forEach(function(r,i){ out.push([s.date,s.num,s.unit,s.welder,s.bay,s.side,trav?'see traveler':s.thick,trav?'see traveler':s.circ,phn,insn,r.dir,s.startFace,
       s.clockReading,s.clockPhone?fmtTs(s.clockPhone):'',s.offset==null?'':(s.offset/1000).toFixed(3),s.notes,
       i+1,LABEL[r.e.type]||r.e.type,r.pass,r.wfs,r.volts,r.face,r.from,r.welding?'yes':'no',recTod(s,r.e.t,3),fmtTs(r.e.t),((r.e.t-t0)/1000).toFixed(3),r.e.tag||'',r.e.note||'']) }) });
     return out }
@@ -574,9 +634,9 @@ textarea{min-height:80px;resize:vertical}
         navigator.share({files:files}).catch(function(e2){ if(!e2||e2.name!=='AbortError') downloadAll(files) }) });
       downloadAll(files) }) }
   function shareFile(text,name,type){ shareFiles([new File([text],name,{type:type})]) }
-  // CSV plus each session's traveler photos, named to match the traveler_photos column.
+  // CSV plus each session's traveler and inspection photos, named to match the CSV photo columns.
   function shareWithPhotos(list,csvName){ var csv=new File([toCsv(list)],csvName,{type:'text/csv'}), jobs=[];
-    list.forEach(function(s){ (s.photos||[]).forEach(function(p,i){ jobs.push(photoGet(p.id).then(function(b){ return b?new File([b],photoName(s,i),{type:'image/jpeg'}):null })) }) });
+    list.forEach(function(s){ sessionFiles(s).forEach(function(p){ jobs.push(photoGet(p.id).then(function(b){ return b?new File([b],p.name,{type:'image/jpeg'}):null })) }) });
     if(!jobs.length) return shareFiles([csv]);
     Promise.all(jobs).then(function(fs){ shareFiles([csv].concat(fs.filter(Boolean))) }).catch(function(){ toast('Could not read photos. Sharing CSV only.'); shareFiles([csv]) }) }
   function blobToDataUrl(b){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){ res(r.result) }; r.onerror=function(){ rej(r.error) }; r.readAsDataURL(b) }) }
@@ -588,7 +648,7 @@ textarea{min-height:80px;resize:vertical}
   $('btnShareAll').addEventListener('click',function(){ if(!state.sessions.length) return toast('No sessions yet'); shareWithPhotos(state.sessions,'daq-all-sessions-'+todayIso()+'.csv') });
   $('btnCopyAll').addEventListener('click',function(){ if(!state.sessions.length) return toast('No sessions yet'); copyText(toTsv(state.sessions)) });
   $('btnBackup').addEventListener('click',function(){ var photos={}, jobs=[];
-    state.sessions.forEach(function(s){ (s.photos||[]).forEach(function(p){ jobs.push(photoGet(p.id).then(function(b){ return b?blobToDataUrl(b):null }).then(function(u){ if(u) photos[p.id]=u })) }) });
+    state.sessions.forEach(function(s){ sessionFiles(s).forEach(function(p){ jobs.push(photoGet(p.id).then(function(b){ return b?blobToDataUrl(b):null }).then(function(u){ if(u) photos[p.id]=u })) }) });
     Promise.all(jobs).then(function(){ var json=JSON.stringify({app:'daqprod',version:1,exported:fmtTs(Date.now())+' UTC',state:state,photos:photos});
     shareFile(json,'daq-prod-backup-'+fmtTs(Date.now()).slice(0,16).replace(/[ :]/g,'-')+'.json','application/json') }).catch(function(){ toast('Backup failed: could not read photos') }) });
   $('btnRestore').addEventListener('click',function(){ $('fileRestore').click() });
@@ -597,7 +657,7 @@ textarea{min-height:80px;resize:vertical}
       var have={}; state.sessions.forEach(function(s){have[s.id]=1}); var added=0;
       var jobs=[];
       b.state.sessions.forEach(function(s){ if(!have[s.id]){ state.sessions.push(s); added++;
-        (s.photos||[]).forEach(function(p){ var bl=b.photos&&b.photos[p.id]&&dataUrlToBlob(b.photos[p.id]); if(bl) jobs.push(photoPut(p.id,bl).catch(function(){})) }) } });
+        sessionFiles(s).forEach(function(p){ var bl=b.photos&&b.photos[p.id]&&dataUrlToBlob(b.photos[p.id]); if(bl) jobs.push(photoPut(p.id,bl).catch(function(){})) }) } });
       save(); renderSessions(); renderHeader();
       return Promise.all(jobs).then(function(){ toast(added?('Restored '+added+' session(s)'):'Nothing new in that backup') }) }).catch(function(){ toast('That file is not a DAQ Production backup') }) });
 
