@@ -203,6 +203,7 @@ textarea{min-height:80px;resize:vertical}
           <input type="file" id="fTravPhoto" accept="image/*" capture="environment" hidden>
           <div class="note">Up to 4 photos. Make sure thickness and circumference are readable. Tap a photo to check it.</div>
         </div>
+        <div class="field"><label for="fFaceLen">Face length (in, optional)</label><input type="text" id="fFaceLen" inputmode="decimal" placeholder="length of one face, e.g. 4 or 4 1/2"></div>
         <div class="field"><label>Weld direction for pass 1 (each pass can change it)</label>
           <div class="seg" id="fDir"><button type="button" data-v="up">Up: 1 &rarr; 12</button><button type="button" data-v="down">Down: 12 &rarr; 1</button></div></div>
         <div class="field"><label>Start face (first pass)</label>
@@ -296,7 +297,7 @@ textarea{min-height:80px;resize:vertical}
 
 <script>
 (function(){
-  var LS_KEY='daqprod.v1', VER='v2026-10-24b', DAY=86400000;
+  var LS_KEY='daqprod.v1', VER='v2026-10-24c', DAY=86400000;
   function $(id){return document.getElementById(id)}
   function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
   // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
@@ -322,7 +323,7 @@ textarea{min-height:80px;resize:vertical}
   function blankSession(prev){ var p=prev||{};
     var n=parseInt(p.num,10);
     return {id:uid(),created:Date.now(),date:todayIso(),num:isNaN(n)?'':String(n+1),unit:p.unit||'',welder:p.welder||'',bay:p.bay||'',side:p.side||'',
-      dims:p.dims||'values',photos:[],thick:p.thick||'',circ:p.circ||'',dir:p.dir||'up',startFace:p.startFace||1,
+      dims:p.dims||'values',photos:[],thick:p.thick||'',circ:p.circ||'',faceLen:p.faceLen==null?'':p.faceLen,dir:p.dir||'up',startFace:p.startFace||1,
       clockReading:p.clockReading||'',clockPhone:p.clockPhone||null,offset:p.offset==null?null:p.offset,offsetFrom:p.offset==null?'':(p.offsetFrom||('session '+(p.num||'?'))),
       notes:'',events:[]} }
 
@@ -386,7 +387,7 @@ textarea{min-height:80px;resize:vertical}
 
   function setupToForm(){ var s=cur();
     $('fNum').value=s.num; $('fUnit').value=s.unit; $('fWelder').value=s.welder; $('fBay').value=s.bay;
-    segSet('fSide',s.side); segSet('fDims',s.dims||'values'); $('fThick').value=s.thick; $('fCirc').value=s.circ; segSet('fDir',s.dir); $('fStart').value=s.startFace;
+    segSet('fSide',s.side); segSet('fDims',s.dims||'values'); $('fThick').value=s.thick; $('fCirc').value=s.circ; $('fFaceLen').value=s.faceLen==null?'':s.faceLen; segSet('fDir',s.dir); $('fStart').value=s.startFace;
     $('fClock').value=s.clockReading; $('fNotes').value=s.notes; dimsView(); renderThumbs(); renderPasses();
     $('btnBegin').textContent=s.events.length?'Save and return to session':'Begin session' }
   function renderPasses(){ var s=cur(), box=$('passList'); box.innerHTML='';
@@ -398,7 +399,7 @@ textarea{min-height:80px;resize:vertical}
       row.appendChild(info); row.appendChild(b); box.appendChild(row) }) }
   function formToSetup(){ var s=cur();
     s.num=$('fNum').value.trim(); s.unit=$('fUnit').value.trim(); s.welder=$('fWelder').value.trim(); s.bay=$('fBay').value.trim();
-    s.side=segGet('fSide'); s.dims=segGet('fDims')||'values'; s.thick=$('fThick').value.trim(); s.circ=$('fCirc').value.trim(); s.dir=segGet('fDir')||'up';
+    s.side=segGet('fSide'); s.dims=segGet('fDims')||'values'; s.thick=$('fThick').value.trim(); s.circ=$('fCirc').value.trim(); var fl=parseInches($('fFaceLen').value); s.faceLen=fl==null?'':fl; s.dir=segGet('fDir')||'up';
     var f=parseInt($('fStart').value,10); s.startFace=(f>=1&&f<=12)?f:1; s.notes=$('fNotes').value; save() }
 
   // ---- traveler photos (IndexedDB; localStorage is too small for images) ----
@@ -457,6 +458,8 @@ textarea{min-height:80px;resize:vertical}
     [['fNum',s.num],['fUnit',s.unit],['fWelder',s.welder],['fBay',s.bay],['fSide',s.side],['fThick',trav||s.thick],['fCirc',trav||s.circ]].forEach(function(p){
       var f=$(p[0]).closest('.field'); if(!p[1]){ miss.push(p[0]); f.classList.add('need') } else f.classList.remove('need') });
     if(trav&&!(s.photos||[]).length){ miss.push('photos'); $('dimsTraveler').classList.add('need') } else $('dimsTraveler').classList.remove('need');
+    var flf=$('fFaceLen').closest('.field'), flv=$('fFaceLen').value.trim(); flf.classList.toggle('need',!!flv&&parseInches(flv)==null);
+    if(flv&&parseInches(flv)==null){ toast('Face length must be inches, e.g. 4 or 4 1/2 (or leave it blank)'); return }
     if(miss.length){ toast('Fill in the outlined fields'); return }
     if(s.offset==null && !confirm('Recorder clock is not synced. Log times will be phone UTC only. Begin anyway?')) return;
     if(s.events.length){ renderLive(); show('vLive'); return }
@@ -580,8 +583,9 @@ textarea{min-height:80px;resize:vertical}
     if((m=v.match(/^(\d+)\/(\d+)$/))&&+m[2]) return Math.round(m[1]/m[2]*10000)/10000;
     if(/^(\d+\.?\d*|\.\d+)$/.test(v)) return Math.round(parseFloat(v)*10000)/10000;
     return null }
-  function defectText(d){ return 'Face '+d.face+' · depth '+d.depth+' in · length '+d.length+' in' }
-  function defectCsv(d){ return 'F'+d.face+' D'+d.depth+' L'+d.length+(d.note?' ('+d.note+')':'') }
+  function betweenText(d){ return d.from==null||d.from===''?'':(d.to==null||d.to===''?String(d.from):d.from+'-'+d.to) }
+  function defectText(d){ var b=betweenText(d); return 'Face '+d.face+' · depth '+d.depth+' in · length '+d.length+' in'+(b?' · between '+b.replace('-','–')+' in':'') }
+  function defectCsv(d){ var b=betweenText(d); return 'F'+d.face+' D'+d.depth+' L'+d.length+(b?' @'+b:'')+(d.note?' ('+d.note+')':'') }
   function renderDefects(){ var s=cur(); if(!s) return; var box=$('defList'); box.innerHTML=''; var list=s.defects||[];
     if(!list.length) box.appendChild(el('div','note','No defects recorded.'));
     list.forEach(function(d,i){ var b=el('button','lrow'); b.type='button';
@@ -595,6 +599,11 @@ textarea{min-height:80px;resize:vertical}
     iD.type=iL.type=iN.type='text'; iD.inputMode=iL.inputMode='decimal'; iD.placeholder='e.g. 0.375 or 3/8'; iL.placeholder='e.g. 1 or 1 1/2';
     iD.value=d?d.depth:''; iL.value=d?d.length:''; iN.value=d?(d.note||''):''; iN.placeholder='e.g. depth range 1/4-3/8';
     var fD=fieldEl('Depth (in)',iD), fL=fieldEl('Length (in)',iL); g.appendChild(fD); g.appendChild(fL); body.appendChild(g);
+    var g2=el('div','grid2'), iF=document.createElement('input'), iT=document.createElement('input');
+    iF.type=iT.type='text'; iF.inputMode=iT.inputMode='decimal'; iF.placeholder='from, e.g. 1.5'; iT.placeholder='to, e.g. 2.5';
+    iF.value=d&&d.from!=null?d.from:''; iT.value=d&&d.to!=null?d.to:'';
+    var fF=fieldEl('Occurs between (in)',iF), fT=fieldEl('and (in)',iT); g2.appendChild(fF); g2.appendChild(fT); body.appendChild(g2);
+    body.appendChild(el('div','note','Optional. Inches along the face, measured from its start edge'+(s.faceLen!==''&&s.faceLen!=null?' (face length '+s.faceLen+' in).':'.')));
     body.appendChild(fieldEl('Note (optional)',iN));
     if(d){ var del=el('button','btn danger','Delete this defect'); del.type='button'; del.style.width='100%';
       del.addEventListener('click',function(){ if(!confirm('Delete defect #'+(i+1)+' ('+defectText(d)+')?')) return;
@@ -603,7 +612,14 @@ textarea{min-height:80px;resize:vertical}
       var fv=parseInt(pick.dataset.v,10), dv=parseInches(iD.value), lv=parseInches(iL.value), ok=true;
       pick.parentNode.classList.toggle('need',!(fv>=1&&fv<=12)); fD.classList.toggle('need',dv==null); fL.classList.toggle('need',lv==null);
       if(!(fv>=1&&fv<=12)||dv==null||lv==null){ toast('Face, depth and length are required (inches, e.g. 0.375 or 3/8)'); return false }
-      var rec={id:d?d.id:uid(),face:fv,depth:dv,length:lv,note:iN.value.trim(),t:d?d.t:Date.now()};
+      var fr=iF.value.trim()?parseInches(iF.value):'', to=iT.value.trim()?parseInches(iT.value):'', fl=s.faceLen===''||s.faceLen==null?null:+s.faceLen, why='';
+      if(fr===null||to===null) why='Position must be inches, e.g. 1.5 or 1 1/2';
+      else if(to!==''&&fr==='') why='Enter where it starts ("between") before where it ends';
+      else if(to!==''&&to<fr) why='The end is before the start';
+      else if(fl!=null&&((fr!==''&&fr>fl)||(to!==''&&to>fl))) why='Position is past the end of the face ('+fl+' in)';
+      fF.classList.toggle('need',!!why); fT.classList.toggle('need',!!why);
+      if(why){ toast(why); return false }
+      var rec={id:d?d.id:uid(),face:fv,depth:dv,length:lv,from:fr,to:to,note:iN.value.trim(),t:d?d.t:Date.now()};
       if(d) s.defects[i]=rec; else s.defects=(s.defects||[]).concat([rec]);
       save(); renderDefects(); renderSessions(); toast(d?'Defect saved':'Defect added · face '+fv) });
     if(!d) setTimeout(function(){ iD.focus() },50) }
@@ -650,14 +666,14 @@ textarea{min-height:80px;resize:vertical}
         p.face=fv; save(); renderInsp(); toast('Saved · face '+fv) }) }) }
 
   // ---- export ----
-  var COLS=['session_date','session','unit','welder','bay','pole_side','material_thickness','pole_circumference','traveler_photos','inspection_photos','defects','weld_direction','first_start_face',
+  var COLS=['session_date','session','unit','welder','bay','pole_side','material_thickness','pole_circumference','face_length','traveler_photos','inspection_photos','defects','weld_direction','first_start_face',
     'recorder_clock_reading','phone_time_at_sync_utc','recorder_offset_s','setup_notes',
     'event_no','event','pass','wfs','volts','face','from_face','welding_after','recorder_time','phone_time_utc','elapsed_s','event_type','note'];
   function rows(list){ var out=[]; list.forEach(function(s){ var st=replay(s), t0=s.events.length?s.events[0].t:0, trav=s.dims==='traveler';
     var phn=(s.photos||[]).map(function(p,i){ return photoName(s,i) }).join('; ');
     var insn=(s.insp||[]).map(function(p,i){ return inspName(s,i) }).join('; ');
     var defs=(s.defects||[]).map(defectCsv).join('; ');
-    st.rows.forEach(function(r,i){ out.push([s.date,s.num,s.unit,s.welder,s.bay,s.side,trav?'see traveler':s.thick,trav?'see traveler':s.circ,phn,insn,defs,r.dir,s.startFace,
+    st.rows.forEach(function(r,i){ out.push([s.date,s.num,s.unit,s.welder,s.bay,s.side,trav?'see traveler':s.thick,trav?'see traveler':s.circ,s.faceLen==null?'':s.faceLen,phn,insn,defs,r.dir,s.startFace,
       s.clockReading,s.clockPhone?fmtTs(s.clockPhone):'',s.offset==null?'':(s.offset/1000).toFixed(3),s.notes,
       i+1,LABEL[r.e.type]||r.e.type,r.pass,r.wfs,r.volts,r.face,r.from,r.welding?'yes':'no',recTod(s,r.e.t,3),fmtTs(r.e.t),((r.e.t-t0)/1000).toFixed(3),r.e.tag||'',r.e.note||'']) }) });
     return out }
