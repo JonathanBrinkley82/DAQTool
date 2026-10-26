@@ -334,10 +334,12 @@ textarea{min-height:80px;resize:vertical}
   function replay(s){
     var st={passN:0,wfs:'',volts:'',dir:s.dir,face:null,welding:false,weldSince:null,lastRun:null,done:{},presses:0,ended:false,rows:[]};
     s.events.forEach(function(e){ var from='';
+      // GOTO = welder relocated by tapping a face box: moves the face only; not logged, not a press.
+      if(e.type==='GOTO'){ if(st.face!=null) st.face=+e.to; return }
       if(e.type==='PASS'){ st.passN++; st.wfs=e.wfs; st.volts=e.volts; st.dir=e.dir||s.dir; st.face=+e.startFace; st.done={}; st.presses=0 }
       else if(e.type==='START'){ st.welding=true; st.weldSince=e.t }
       else if(e.type==='STOP'){ if(st.weldSince!=null) st.lastRun=e.t-st.weldSince; st.welding=false; st.weldSince=null }
-      else if(e.type==='FACE' && st.face!=null){ from=st.face; st.done[from]=1; st.presses++; st.face=e.to?+e.to:nextFace(st.face,st.dir) }
+      else if(e.type==='FACE' && st.face!=null){ from=st.face; st.done[from]=1; st.presses++; st.face=nextFace(st.face,st.dir) }
       else if(e.type==='END'){ st.ended=true }
       st.rows.push({e:e,pass:st.passN||'',wfs:st.wfs,volts:st.volts,dir:st.dir,face:st.face==null?'':st.face,from:from,welding:st.welding});
     });
@@ -346,7 +348,7 @@ textarea{min-height:80px;resize:vertical}
   var LABEL={PASS:'PASS_BEGIN',START:'START',STOP:'STOP',FACE:'FACE',MODEL:'MODEL_FLAG',NOTE:'EVENT',END:'SESSION_END'};
   function describe(r){ var e=r.e;
     if(e.type==='PASS') return 'Pass '+r.pass+' begins on face '+e.startFace+' · '+r.dir+' · '+e.wfs+' WFS · '+e.volts+' V';
-    if(e.type==='FACE') return 'Face '+r.from+' → '+r.face+(e.to?' (jumped)':'');
+    if(e.type==='FACE') return 'Face '+r.from+' → '+r.face;
     if(e.type==='START') return 'START on face '+r.face;
     if(e.type==='STOP') return 'STOP on face '+r.face;
     if(e.type==='MODEL') return 'Model flag on face '+r.face;
@@ -366,7 +368,7 @@ textarea{min-height:80px;resize:vertical}
     state.sessions.slice().reverse().forEach(function(s){ var st=replay(s);
       var row=el('div','srow'), info=el('div','info');
       info.appendChild(el('div','t','Session '+(s.num||'?')+' · Unit '+(s.unit||'?')+' · Bay '+(s.bay||'?')+' · '+(s.side||'?')));
-      info.appendChild(el('div','s',s.date+' · '+(s.welder||'no welder')+' · '+st.passN+' pass · '+s.events.length+' events'+((s.insp||[]).length?' · '+s.insp.length+' insp photos':'')+((s.defects||[]).length?' · '+s.defects.length+' defects':'')));
+      info.appendChild(el('div','s',s.date+' · '+(s.welder||'no welder')+' · '+st.passN+' pass · '+st.rows.length+' events'+((s.insp||[]).length?' · '+s.insp.length+' insp photos':'')+((s.defects||[]).length?' · '+s.defects.length+' defects':'')));
       var tag=el('span','tag'+(st.ended?'':' open'),st.ended?'Ended':'Open');
       var open=el('button','btn','Open'); open.type='button';
       open.addEventListener('click',function(){ state.active=s.id; save(); openSession() });
@@ -477,9 +479,9 @@ textarea{min-height:80px;resize:vertical}
     $('faceNum').textContent=st.face==null?'-':st.face;
     $('pressCount').textContent=st.presses+' / 12';
     var strip=$('faceStrip'); strip.innerHTML='';
-    // Tap a face box to log a FACE jump straight to that face (welding can skip around).
+    // Tap a face box to move to that face (welding can skip around). Nothing is logged until the next button.
     for(var i=1;i<=12;i++){ var fb=el('button',(st.face===i?'now':(st.done[i]?'done':'')),String(i)); fb.type='button'; fb.dataset.f=i;
-      fb.setAttribute('aria-label',st.face===i?'Face '+i+', current':'Jump to face '+i); fb.disabled=st.ended||!st.passN; strip.appendChild(fb) }
+      fb.setAttribute('aria-label',st.face===i?'Face '+i+', current':'Move to face '+i); fb.disabled=st.ended||!st.passN; strip.appendChild(fb) }
     $('passDone').hidden=st.presses<12;
     var ss=$('bStartStop'); ss.className='big '+(st.welding?'stop':'start'); ss.disabled=st.ended||!st.passN;
     ss.textContent=st.welding?'STOP':'START';
@@ -487,7 +489,7 @@ textarea{min-height:80px;resize:vertical}
     $('bFace').textContent=st.face==null?'FACE':('FACE  '+st.face+' → '+nf); $('bFace').disabled=st.ended||!st.passN;
     $('bModel').disabled=$('bEvent').disabled=$('bPass').disabled=st.ended;
     $('bEnd').textContent=st.ended?'Reopen':'End session'; $('bEnd').classList.toggle('danger',!st.ended);
-    $('bUndo').disabled=!s.events.length;
+    $('bUndo').disabled=!st.rows.length;
     live.weldSince=st.weldSince; live.lastRun=st.lastRun;
     var log=$('log'); log.innerHTML='';
     if(!st.rows.length) log.appendChild(el('div','note','Nothing logged yet.'));
@@ -505,14 +507,16 @@ textarea{min-height:80px;resize:vertical}
     flash(this); push({t:t,type:st.welding?'STOP':'START'}) });
   $('bFace').addEventListener('click',function(){ if(!once('face')) return; var t=tapTime(), st=replay(cur()); if(st.ended||!st.passN) return;
     flash(this); push({t:t,type:'FACE'}) });
-  $('faceStrip').addEventListener('click',function(ev){ var b=ev.target.closest('button'); if(!b||b.disabled||!once('jump')) return;
+  $('faceStrip').addEventListener('click',function(ev){ var b=ev.target.closest('button'); if(!b||b.disabled||!once('goto')) return;
     var t=tapTime(), st=replay(cur()), f=+b.dataset.f; if(st.ended||!st.passN||st.face===f) return;
-    flash(b); push({t:t,type:'FACE',to:f}); toast('Face '+st.face+' → '+f+' (jumped)') });
+    var s=cur(), last=s.events[s.events.length-1]; flash(b);
+    if(last&&last.type==='GOTO'){ last.to=f; last.t=t; save(); renderLive() } else push({t:t,type:'GOTO',to:f});
+    toast('Now on face '+f) });
   $('bModel').addEventListener('click',function(){ if(!once('model')) return; var t=tapTime(); flash(this); push({t:t,type:'MODEL',note:''}); toast('Model flag logged. Tap it in the log to add detail.') });
   $('bEvent').addEventListener('click',function(){ var t=tapTime(); noteModal(t) });
   $('bPass').addEventListener('click',function(){ var s=cur(), st=replay(s); passModal(st.face==null?s.startFace:st.face,st.wfs,st.volts,st.dir,null,null) });
-  $('bUndo').addEventListener('click',function(){ var s=cur(); if(!s.events.length) return; var st=replay(s), r=st.rows[st.rows.length-1];
-    if(!confirm('Undo: '+describe(r)+' at '+(recTod(s,r.e.t,1)||fmtTod(r.e.t,1)+' UTC')+'?')) return; s.events.pop(); save(); renderLive(); toast('Removed') });
+  $('bUndo').addEventListener('click',function(){ var s=cur(), st=replay(s), r=st.rows[st.rows.length-1]; if(!r) return;
+    if(!confirm('Undo: '+describe(r)+' at '+(recTod(s,r.e.t,1)||fmtTod(r.e.t,1)+' UTC')+'?')) return; s.events=s.events.filter(function(e){return e!==r.e}); save(); renderLive(); toast('Removed') });
   $('bEnd').addEventListener('click',function(){ var s=cur(), st=replay(s), t=Date.now();
     if(st.ended){ s.events=s.events.filter(function(e){return e.type!=='END'}); save(); renderLive(); toast('Session reopened'); return }
     if(!confirm('End session '+(s.num||'?')+'?'+(st.welding?' A STOP will be logged now.':''))) return;
@@ -674,7 +678,7 @@ textarea{min-height:80px;resize:vertical}
   var COLS=['session_date','session','unit','welder','bay','pole_side','material_thickness','pole_circumference','face_length','traveler_photos','inspection_photos','defects','weld_direction','first_start_face',
     'recorder_clock_reading','phone_time_at_sync_utc','recorder_offset_s','setup_notes',
     'event_no','event','pass','wfs','volts','face','from_face','welding_after','recorder_time','phone_time_utc','elapsed_s','event_type','note'];
-  function rows(list){ var out=[]; list.forEach(function(s){ var st=replay(s), t0=s.events.length?s.events[0].t:0, trav=s.dims==='traveler';
+  function rows(list){ var out=[]; list.forEach(function(s){ var st=replay(s), t0=st.rows.length?st.rows[0].e.t:0, trav=s.dims==='traveler';
     var phn=(s.photos||[]).map(function(p,i){ return photoName(s,i) }).join('; ');
     var insn=(s.insp||[]).map(function(p,i){ return inspName(s,i) }).join('; ');
     var defs=(s.defects||[]).map(defectCsv).join('; ');
