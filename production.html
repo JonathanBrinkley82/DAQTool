@@ -107,10 +107,10 @@ textarea{min-height:80px;resize:vertical}
 .facenum{font-size:64px;font-weight:700;line-height:1}
 .facemeta{font-size:13px;color:var(--muted)}
 .facemeta b{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
-.faces{display:grid;grid-template-columns:repeat(12,1fr);gap:3px}
-.faces div{font-family:var(--mono);font-size:12px;text-align:center;padding:6px 0;border-radius:4px;background:var(--surface2);border:1px solid var(--line);color:var(--muted)}
-.faces div.done{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
-.faces div.now{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.faces{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.faces button{font-family:var(--mono);font-size:17px;text-align:center;min-height:46px;border-radius:6px;background:var(--surface2);border:1px solid var(--line);color:var(--muted)}
+.faces button.done{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.faces button.now{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
 .complete{text-align:center;font-weight:700;color:var(--good);margin-top:8px}
 .big{display:block;width:100%;border:none;border-radius:12px;min-height:92px;font-size:30px;font-weight:800;letter-spacing:.04em;margin-top:12px}
 .big.start{background:var(--good);color:var(--on)}
@@ -297,7 +297,7 @@ textarea{min-height:80px;resize:vertical}
 
 <script>
 (function(){
-  var LS_KEY='daqprod.v1', VER='v2026-10-24c', DAY=86400000;
+  var LS_KEY='daqprod.v1', VER='v2026-10-26a', DAY=86400000;
   function $(id){return document.getElementById(id)}
   function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
   // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
@@ -337,7 +337,7 @@ textarea{min-height:80px;resize:vertical}
       if(e.type==='PASS'){ st.passN++; st.wfs=e.wfs; st.volts=e.volts; st.dir=e.dir||s.dir; st.face=+e.startFace; st.done={}; st.presses=0 }
       else if(e.type==='START'){ st.welding=true; st.weldSince=e.t }
       else if(e.type==='STOP'){ if(st.weldSince!=null) st.lastRun=e.t-st.weldSince; st.welding=false; st.weldSince=null }
-      else if(e.type==='FACE' && st.face!=null){ from=st.face; st.done[from]=1; st.presses++; st.face=nextFace(st.face,st.dir) }
+      else if(e.type==='FACE' && st.face!=null){ from=st.face; st.done[from]=1; st.presses++; st.face=e.to?+e.to:nextFace(st.face,st.dir) }
       else if(e.type==='END'){ st.ended=true }
       st.rows.push({e:e,pass:st.passN||'',wfs:st.wfs,volts:st.volts,dir:st.dir,face:st.face==null?'':st.face,from:from,welding:st.welding});
     });
@@ -346,7 +346,7 @@ textarea{min-height:80px;resize:vertical}
   var LABEL={PASS:'PASS_BEGIN',START:'START',STOP:'STOP',FACE:'FACE',MODEL:'MODEL_FLAG',NOTE:'EVENT',END:'SESSION_END'};
   function describe(r){ var e=r.e;
     if(e.type==='PASS') return 'Pass '+r.pass+' begins on face '+e.startFace+' · '+r.dir+' · '+e.wfs+' WFS · '+e.volts+' V';
-    if(e.type==='FACE') return 'Face '+r.from+' → '+r.face;
+    if(e.type==='FACE') return 'Face '+r.from+' → '+r.face+(e.to?' (jumped)':'');
     if(e.type==='START') return 'START on face '+r.face;
     if(e.type==='STOP') return 'STOP on face '+r.face;
     if(e.type==='MODEL') return 'Model flag on face '+r.face;
@@ -477,7 +477,9 @@ textarea{min-height:80px;resize:vertical}
     $('faceNum').textContent=st.face==null?'-':st.face;
     $('pressCount').textContent=st.presses+' / 12';
     var strip=$('faceStrip'); strip.innerHTML='';
-    for(var i=1;i<=12;i++){ strip.appendChild(el('div',(st.face===i?'now':(st.done[i]?'done':'')),String(i))) }
+    // Tap a face box to log a FACE jump straight to that face (welding can skip around).
+    for(var i=1;i<=12;i++){ var fb=el('button',(st.face===i?'now':(st.done[i]?'done':'')),String(i)); fb.type='button'; fb.dataset.f=i;
+      fb.setAttribute('aria-label',st.face===i?'Face '+i+', current':'Jump to face '+i); fb.disabled=st.ended||!st.passN; strip.appendChild(fb) }
     $('passDone').hidden=st.presses<12;
     var ss=$('bStartStop'); ss.className='big '+(st.welding?'stop':'start'); ss.disabled=st.ended||!st.passN;
     ss.textContent=st.welding?'STOP':'START';
@@ -503,6 +505,9 @@ textarea{min-height:80px;resize:vertical}
     flash(this); push({t:t,type:st.welding?'STOP':'START'}) });
   $('bFace').addEventListener('click',function(){ if(!once('face')) return; var t=tapTime(), st=replay(cur()); if(st.ended||!st.passN) return;
     flash(this); push({t:t,type:'FACE'}) });
+  $('faceStrip').addEventListener('click',function(ev){ var b=ev.target.closest('button'); if(!b||b.disabled||!once('jump')) return;
+    var t=tapTime(), st=replay(cur()), f=+b.dataset.f; if(st.ended||!st.passN||st.face===f) return;
+    flash(b); push({t:t,type:'FACE',to:f}); toast('Face '+st.face+' → '+f+' (jumped)') });
   $('bModel').addEventListener('click',function(){ if(!once('model')) return; var t=tapTime(); flash(this); push({t:t,type:'MODEL',note:''}); toast('Model flag logged. Tap it in the log to add detail.') });
   $('bEvent').addEventListener('click',function(){ var t=tapTime(); noteModal(t) });
   $('bPass').addEventListener('click',function(){ var s=cur(), st=replay(s); passModal(st.face==null?s.startFace:st.face,st.wfs,st.volts,st.dir,null,null) });
