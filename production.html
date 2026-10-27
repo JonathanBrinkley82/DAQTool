@@ -297,7 +297,7 @@ textarea{min-height:80px;resize:vertical}
 
 <script>
 (function(){
-  var LS_KEY='daqprod.v1', VER='v2026-10-26a', DAY=86400000;
+  var LS_KEY='daqprod.v1', VER='v2026-10-27a', DAY=86400000;
   function $(id){return document.getElementById(id)}
   function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
   // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
@@ -482,7 +482,7 @@ textarea{min-height:80px;resize:vertical}
     // Tap a face box to move to that face (welding can skip around). Nothing is logged until the next button.
     for(var i=1;i<=12;i++){ var fb=el('button',(st.face===i?'now':(st.done[i]?'done':'')),String(i)); fb.type='button'; fb.dataset.f=i;
       fb.setAttribute('aria-label',st.face===i?'Face '+i+', current':'Move to face '+i); fb.disabled=st.ended||!st.passN; strip.appendChild(fb) }
-    $('passDone').hidden=st.presses<12;
+    $('passDone').hidden=Object.keys(st.done).length<12;   // complete = all 12 faces shaded (taps can skip faces)
     var ss=$('bStartStop'); ss.className='big '+(st.welding?'stop':'start'); ss.disabled=st.ended||!st.passN;
     ss.textContent=st.welding?'STOP':'START';
     var nf=st.face==null?'':nextFace(st.face,st.dir);
