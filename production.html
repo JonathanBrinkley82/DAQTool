@@ -297,7 +297,7 @@ textarea{min-height:80px;resize:vertical}
 
 <script>
 (function(){
-  var LS_KEY='daqprod.v1', VER='v2026-10-27a', DAY=86400000;
+  var LS_KEY='daqprod.v1', VER='v2026-11-02a', DAY=86400000;
   function $(id){return document.getElementById(id)}
   function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
   // Stored times are phone epoch ms. Shown/exported as UTC, and as recorder time once synced.
@@ -689,6 +689,12 @@ textarea{min-height:80px;resize:vertical}
   function csvCell(v){v=String(v==null?'':v);return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
   function tsvCell(v){return String(v==null?'':v).replace(/[\t\n\r]+/g,' ')}
   function toCsv(list){return [COLS.join(',')].concat(rows(list).map(function(r){return r.map(csvCell).join(',')})).join('\r\n')+'\r\n'}
+  // Defects CSV: one row per defect, with the inspection photos of that face.
+  var DCOLS=['session_date','session','unit','welder','bay','pole_side','defect_no','face','depth_in','length_in','between_from_in','between_to_in','note','face_photos','recorded_utc'];
+  function defectRows(list){ var out=[]; list.forEach(function(s){ (s.defects||[]).forEach(function(d,i){
+    var ph=(s.insp||[]).map(function(p,j){ return p.face===d.face?inspName(s,j):null }).filter(Boolean).join('; ');
+    out.push([s.date,s.num,s.unit,s.welder,s.bay,s.side,i+1,d.face,d.depth,d.length,d.from,d.to,d.note,ph,fmtTs(d.t)]) }) }); return out }
+  function toDefectCsv(list){return [DCOLS.join(',')].concat(defectRows(list).map(function(r){return r.map(csvCell).join(',')})).join('\r\n')+'\r\n'}
   function toTsv(list){return [COLS.join('\t')].concat(rows(list).map(function(r){return r.map(tsvCell).join('\t')})).join('\n')}
   function downloadAll(files){ files.forEach(function(f,i){ setTimeout(function(){ var a=document.createElement('a'); a.href=URL.createObjectURL(f); a.download=f.name; document.body.appendChild(a); a.click();
     setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000) },i*300) }) }
@@ -700,11 +706,12 @@ textarea{min-height:80px;resize:vertical}
         navigator.share({files:files}).catch(function(e2){ if(!e2||e2.name!=='AbortError') downloadAll(files) }) });
       downloadAll(files) }) }
   function shareFile(text,name,type){ shareFiles([new File([text],name,{type:type})]) }
-  // CSV plus each session's traveler and inspection photos, named to match the CSV photo columns.
-  function shareWithPhotos(list,csvName){ var csv=new File([toCsv(list)],csvName,{type:'text/csv'}), jobs=[];
+  // CSV, a defects CSV (if any defects) and each session's traveler and inspection photos, named to match the CSV photo columns.
+  function shareWithPhotos(list,csvName){ var csv=[new File([toCsv(list)],csvName,{type:'text/csv'})], jobs=[];
+    if(defectRows(list).length) csv.push(new File([toDefectCsv(list)],csvName.replace(/\.csv$/,'-defects.csv'),{type:'text/csv'}));
     list.forEach(function(s){ sessionFiles(s).forEach(function(p){ jobs.push(photoGet(p.id).then(function(b){ return b?new File([b],p.name,{type:'image/jpeg'}):null })) }) });
-    if(!jobs.length) return shareFiles([csv]);
-    Promise.all(jobs).then(function(fs){ shareFiles([csv].concat(fs.filter(Boolean))) }).catch(function(){ toast('Could not read photos. Sharing CSV only.'); shareFiles([csv]) }) }
+    if(!jobs.length) return shareFiles(csv);
+    Promise.all(jobs).then(function(fs){ shareFiles(csv.concat(fs.filter(Boolean))) }).catch(function(){ toast('Could not read photos. Sharing CSV only.'); shareFiles(csv) }) }
   function blobToDataUrl(b){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){ res(r.result) }; r.onerror=function(){ rej(r.error) }; r.readAsDataURL(b) }) }
   function dataUrlToBlob(u){ var m=String(u).match(/^data:([^;]+);base64,(.*)$/); if(!m) return null; var bin=atob(m[2]), a=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return new Blob([a],{type:m[1]}) }
   function copyText(t){ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function(){toast('Copied. Paste into cell A1 in Excel.')},function(){toast('Copy failed. Use Share CSV.')}); else toast('Copy not available. Use Share CSV.') }
